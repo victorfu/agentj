@@ -7,7 +7,7 @@ It includes a web dashboard, a tunnel gateway, and a CLI.
 
 - `apps/web`: Next.js dashboard + API routes
 - `apps/tunnel-gateway`: Fastify + WebSocket gateway for tunnel agents
-- `packages/cli`: Oclif-based CLI (`agentj`)
+- `packages/cli`: Oclif-based CLI (`aj`)
 - `packages/contracts`: shared DB/auth/API contracts
 - `packages/sdk`: client SDK used by CLI
 - `infra/docker`: Docker Compose setup for local stack and DB-first workflow
@@ -32,7 +32,17 @@ cp .env.example .env
 pnpm install
 ```
 
-3. Initialize database:
+3. Start PostgreSQL (required), then initialize database:
+
+Local PostgreSQL: start your local PostgreSQL 16 service.
+
+Docker PostgreSQL:
+
+```sh
+pnpm db:docker:up
+```
+
+Initialize database:
 
 ```sh
 pnpm db:migrate
@@ -54,8 +64,8 @@ pnpm --filter @agentj/tunnel-gateway dev
 
 ```sh
 pnpm --filter @agentj/cli build
-node packages/cli/bin/run.js login --token agentj_pat_dev_local_token
-node packages/cli/bin/run.js tunnel http 3001 --project <project-id>
+pnpm --filter @agentj/cli exec aj login --token agentj_pat_dev_local_token
+pnpm --filter @agentj/cli exec aj tunnel http 3001 --project <project-id>
 ```
 
 ## Docker (Database-first)

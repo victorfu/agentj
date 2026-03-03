@@ -8,7 +8,7 @@ export default class WhoAmI extends Command {
   async run(): Promise<void> {
     const client = await loadApiClient();
     if (!client.token) {
-      throw new Error('No token found. Run `agentj login --token <PAT>` first.');
+      throw new Error('No token found. Run `aj login --token <PAT>` first.');
     }
 
     const me = await client.me();

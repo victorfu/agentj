@@ -20,6 +20,17 @@ cp .env.example .env
 pnpm install
 ```
 
+## 啟動 PostgreSQL（必要）
+
+在執行 migration 與 seed 前，PostgreSQL 必須先啟動。
+
+- 本機 PostgreSQL：請先啟動本機 PostgreSQL 16 服務
+- Docker PostgreSQL：
+
+```sh
+pnpm db:docker:up
+```
+
 ## 資料庫初始化
 
 ```sh
@@ -74,6 +85,6 @@ SEED_PAT_TOKEN=你的token pnpm db:docker:bootstrap
 
 ```sh
 pnpm --filter @agentj/cli build
-node packages/cli/bin/run.js login --token agentj_pat_dev_local_token
-node packages/cli/bin/run.js tunnel http 3001 --project <project-id>
+pnpm --filter @agentj/cli exec aj login --token agentj_pat_dev_local_token
+pnpm --filter @agentj/cli exec aj tunnel http 3001 --project <project-id>
 ```

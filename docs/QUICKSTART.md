@@ -20,6 +20,17 @@ cp .env.example .env
 pnpm install
 ```
 
+## Start PostgreSQL (Required)
+
+Before running migrations and seed, PostgreSQL must be running.
+
+- Local PostgreSQL: start your local PostgreSQL 16 service
+- Docker PostgreSQL:
+
+```sh
+pnpm db:docker:up
+```
+
 ## Migrate and Seed
 
 ```sh
@@ -76,6 +87,6 @@ SEED_PAT_TOKEN=your_token pnpm db:docker:bootstrap
 
 ```sh
 pnpm --filter @agentj/cli build
-node packages/cli/bin/run.js login --token agentj_pat_dev_local_token
-node packages/cli/bin/run.js tunnel http 3001 --project <project-id>
+pnpm --filter @agentj/cli exec aj login --token agentj_pat_dev_local_token
+pnpm --filter @agentj/cli exec aj tunnel http 3001 --project <project-id>
 ```

@@ -22,7 +22,7 @@ export default class TunnelHttp extends Command {
     const config = resolveCliConfig();
 
     if (!client.token) {
-      throw new Error('No token found. Run `agentj login --token <PAT>` first.');
+      throw new Error('No token found. Run `aj login --token <PAT>` first.');
     }
 
     const tunnel = await client.createTunnel(flags.project, {

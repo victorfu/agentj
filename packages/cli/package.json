@@ -4,11 +4,11 @@
   "private": true,
   "type": "module",
   "bin": {
-    "agentj": "./bin/run.js"
+    "aj": "./bin/run.js"
   },
   "oclif": {
     "commands": "./dist/commands",
-    "bin": "agentj"
+    "bin": "aj"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
