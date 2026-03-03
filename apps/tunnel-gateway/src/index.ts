@@ -3,6 +3,7 @@ import { Buffer } from 'node:buffer';
 
 import websocketPlugin from '@fastify/websocket';
 import {
+  asc,
   desc,
   eq,
   inArray,
@@ -88,6 +89,9 @@ const REDACT_HEADERS = new Set([
   'proxy-authorization',
   'x-api-key'
 ]);
+
+const REQUEST_LOG_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
+const CLEANUP_BATCH_SIZE = 1000;
 
 setInterval(() => {
   void cleanupOldRequestLogs();
@@ -641,19 +645,27 @@ async function persistChunk(
 }
 
 async function cleanupOldRequestLogs(): Promise<void> {
-  const cutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  const cutoff = new Date(Date.now() - REQUEST_LOG_RETENTION_MS);
 
-  const expired = await db
-    .select({ id: ingressRequests.id })
-    .from(ingressRequests)
-    .where(lt(ingressRequests.startedAt, cutoff));
+  while (true) {
+    const expired = await db
+      .select({ id: ingressRequests.id })
+      .from(ingressRequests)
+      .where(lt(ingressRequests.startedAt, cutoff))
+      .orderBy(asc(ingressRequests.startedAt))
+      .limit(CLEANUP_BATCH_SIZE);
 
-  if (expired.length === 0) {
-    return;
+    if (expired.length === 0) {
+      return;
+    }
+
+    const ids = expired.map((row) => row.id);
+    await db.delete(ingressRequests).where(inArray(ingressRequests.id, ids));
+
+    if (expired.length < CLEANUP_BATCH_SIZE) {
+      return;
+    }
   }
-
-  const ids = expired.map((row) => row.id);
-  await db.delete(ingressRequests).where(inArray(ingressRequests.id, ids));
 }
 
 function normalizeHeaders(

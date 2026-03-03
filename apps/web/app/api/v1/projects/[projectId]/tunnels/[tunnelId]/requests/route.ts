@@ -1,4 +1,4 @@
-import { and, desc, eq, lt } from 'drizzle-orm';
+import { and, desc, eq, lt, or } from 'drizzle-orm';
 import { type NextRequest } from 'next/server';
 
 import { ingressRequests, tunnels } from '@agentj/contracts';
@@ -11,6 +11,33 @@ import { hasProjectAccess } from '@/lib/permissions';
 export const dynamic = 'force-dynamic';
 
 const PAGE_SIZE = 25;
+
+interface RequestLogCursor {
+  startedAt: Date;
+  requestId: string | null;
+}
+
+function parseCursor(raw: string): RequestLogCursor | null {
+  const [timestampPart, requestIdPart] = raw.split(':');
+  if (!timestampPart) {
+    return null;
+  }
+
+  const cursorMs = Number(timestampPart);
+  if (!Number.isFinite(cursorMs)) {
+    return null;
+  }
+
+  const startedAt = new Date(cursorMs);
+  if (Number.isNaN(startedAt.getTime())) {
+    return null;
+  }
+
+  return {
+    startedAt,
+    requestId: requestIdPart && requestIdPart.length > 0 ? requestIdPart : null
+  };
+}
 
 export async function GET(
   request: NextRequest,
@@ -35,37 +62,45 @@ export async function GET(
   }
 
   const cursor = request.nextUrl.searchParams.get('cursor');
-  let cursorDate: Date | null = null;
+  let parsedCursor: RequestLogCursor | null = null;
   if (cursor !== null) {
-    const cursorMs = Number(cursor);
-    if (!Number.isFinite(cursorMs)) {
-      return jsonError('VALIDATION_ERROR', 'Invalid cursor', 400);
-    }
-
-    cursorDate = new Date(cursorMs);
-    if (Number.isNaN(cursorDate.getTime())) {
+    parsedCursor = parseCursor(cursor);
+    if (!parsedCursor) {
       return jsonError('VALIDATION_ERROR', 'Invalid cursor', 400);
     }
   }
 
-  const conditions = [eq(ingressRequests.tunnelId, tunnel.id)];
-  if (cursorDate) {
-    conditions.push(lt(ingressRequests.startedAt, cursorDate));
+  let whereClause = eq(ingressRequests.tunnelId, tunnel.id);
+  if (parsedCursor) {
+    const cursorClause = parsedCursor.requestId
+      ? or(
+          lt(ingressRequests.startedAt, parsedCursor.startedAt),
+          and(
+            eq(ingressRequests.startedAt, parsedCursor.startedAt),
+            lt(ingressRequests.id, parsedCursor.requestId)
+          )
+        )
+      : lt(ingressRequests.startedAt, parsedCursor.startedAt);
+
+    if (cursorClause) {
+      const combined = and(whereClause, cursorClause);
+      if (combined) {
+        whereClause = combined;
+      }
+    }
   }
 
   const rows = await db
     .select()
     .from(ingressRequests)
-    .where(and(...conditions))
-    .orderBy(desc(ingressRequests.startedAt))
+    .where(whereClause)
+    .orderBy(desc(ingressRequests.startedAt), desc(ingressRequests.id))
     .limit(PAGE_SIZE + 1);
 
   const hasMore = rows.length > PAGE_SIZE;
   const items = hasMore ? rows.slice(0, PAGE_SIZE) : rows;
-
-  const nextCursor = hasMore
-    ? items[items.length - 1]?.startedAt.getTime().toString() ?? null
-    : null;
+  const tail = items[items.length - 1];
+  const nextCursor = hasMore && tail ? `${tail.startedAt.getTime()}:${tail.id}` : null;
 
   return jsonNoStore({
     items: items.map((row) => ({
