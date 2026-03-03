@@ -1,0 +1,11 @@
+{
+  "files": [],
+  "references": [
+    { "path": "./packages/config" },
+    { "path": "./packages/contracts" },
+    { "path": "./packages/sdk" },
+    { "path": "./packages/cli" },
+    { "path": "./apps/tunnel-gateway" },
+    { "path": "./apps/web" }
+  ]
+}

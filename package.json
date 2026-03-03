@@ -1,0 +1,30 @@
+{
+  "name": "agentj",
+  "private": true,
+  "packageManager": "pnpm@10.17.1",
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev --parallel",
+    "test": "turbo run test",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "db:migrate": "pnpm --filter @agentj/contracts db:migrate",
+    "db:seed": "pnpm --filter @agentj/contracts db:seed",
+    "db:docker:up": "docker compose -f infra/docker/docker-compose.db.yml up -d postgres",
+    "db:docker:down": "docker compose -f infra/docker/docker-compose.db.yml down",
+    "db:docker:reset": "docker compose -f infra/docker/docker-compose.db.yml down -v",
+    "db:docker:bootstrap": "docker compose -f infra/docker/docker-compose.db.yml run --rm db-bootstrap"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.34.0",
+    "turbo": "^2.5.6",
+    "typescript-eslint": "^8.41.0",
+    "typescript": "^5.9.2",
+    "@types/node": "^24.3.0",
+    "eslint": "^9.34.0",
+    "prettier": "^3.6.2"
+  }
+}

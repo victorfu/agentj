@@ -1,0 +1,35 @@
+{
+  "name": "@agentj/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "next build",
+    "dev": "next dev",
+    "start": "next start",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint app src middleware.ts --max-warnings=0",
+    "test": "vitest run --exclude e2e/**",
+    "test:e2e": "playwright test"
+  },
+  "dependencies": {
+    "@agentj/contracts": "workspace:*",
+    "drizzle-orm": "^0.44.5",
+    "next": "^15.5.2",
+    "pg": "^8.16.3",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1",
+    "zod": "^4.1.5"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.55.0",
+    "@agentj/config": "workspace:*",
+    "@types/node": "^24.3.0",
+    "@types/react": "^19.1.11",
+    "@types/react-dom": "^19.1.7",
+    "eslint": "^9.34.0",
+    "eslint-config-next": "^15.5.2",
+    "typescript": "^5.9.2",
+    "vitest": "^3.2.4"
+  }
+}

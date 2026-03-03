@@ -1,0 +1,11 @@
+{
+  local_certs
+}
+
+app.localhost {
+  reverse_proxy web:3000
+}
+
+*.tunnel.localhost {
+  reverse_proxy gateway:4000
+}

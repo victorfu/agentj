@@ -1,0 +1,78 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: agentj
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d agentj"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  web:
+    image: node:24-alpine
+    working_dir: /workspace
+    command: >
+      sh -lc "corepack enable && pnpm install &&
+      pnpm --filter @agentj/contracts db:migrate &&
+      pnpm --filter @agentj/contracts db:seed &&
+      pnpm --filter @agentj/web dev --hostname 0.0.0.0 --port 3000"
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/agentj
+      AGENTJ_TUNNEL_BASE_DOMAIN: tunnel.localhost
+      AGENTJ_CONNECT_TOKEN_SECRET: change-me-in-production-secret
+      AGENTJ_GATEWAY_WS_PUBLIC_URL: ws://localhost:4000/agent/v1/connect
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
+    volumes:
+      - ../../:/workspace
+      - pnpm_store:/root/.local/share/pnpm/store
+
+  gateway:
+    image: node:24-alpine
+    working_dir: /workspace
+    command: >
+      sh -lc "corepack enable && pnpm install &&
+      pnpm --filter @agentj/tunnel-gateway dev"
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/agentj
+      AGENTJ_TUNNEL_BASE_DOMAIN: tunnel.localhost
+      AGENTJ_CONNECT_TOKEN_SECRET: change-me-in-production-secret
+      PORT: 4000
+      AGENTJ_REQUEST_BODY_LIMIT_BYTES: 262144
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "4000:4000"
+    volumes:
+      - ../../:/workspace
+      - pnpm_store:/root/.local/share/pnpm/store
+
+  caddy:
+    image: caddy:2.10.2-alpine
+    depends_on:
+      - web
+      - gateway
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  postgres_data:
+  pnpm_store:
+  caddy_data:
+  caddy_config:

@@ -1,0 +1,33 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "globalEnv": [
+    "DATABASE_URL",
+    "AGENTJ_API_BASE_URL",
+    "AGENTJ_GATEWAY_URL",
+    "AGENTJ_GATEWAY_WS_PUBLIC_URL",
+    "AGENTJ_APP_BASE_URL",
+    "AGENTJ_TUNNEL_BASE_DOMAIN",
+    "AGENTJ_CONNECT_TOKEN_SECRET"
+  ],
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**", ".next/**"]
+    },
+    "dev": {
+      "cache": false,
+      "persistent": true
+    },
+    "test": {
+      "dependsOn": ["^build"],
+      "outputs": ["coverage/**"]
+    },
+    "lint": {
+      "outputs": []
+    },
+    "typecheck": {
+      "dependsOn": ["^build"],
+      "outputs": []
+    }
+  }
+}

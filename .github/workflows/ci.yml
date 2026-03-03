@@ -1,0 +1,34 @@
+name: ci
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/agentj
+      AGENTJ_API_BASE_URL: http://localhost:3000
+      AGENTJ_GATEWAY_URL: ws://localhost:4000/agent/v1/connect
+      AGENTJ_GATEWAY_WS_PUBLIC_URL: ws://localhost:4000/agent/v1/connect
+      AGENTJ_APP_BASE_URL: http://localhost:3000
+      AGENTJ_TUNNEL_BASE_DOMAIN: tunnel.localhost
+      AGENTJ_CONNECT_TOKEN_SECRET: replace-this-with-a-strong-secret
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile=false
+      - name: Lint
+        run: pnpm lint
+      - name: Typecheck
+        run: pnpm typecheck
+      - name: Test
+        run: pnpm test
+      - name: Build
+        run: pnpm build

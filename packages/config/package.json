@@ -1,0 +1,31 @@
+{
+  "name": "@agentj/config",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./tsconfig/base.json": "./tsconfig/base.json",
+    "./tsconfig/node.json": "./tsconfig/node.json",
+    "./tsconfig/next.json": "./tsconfig/next.json",
+    "./eslint/base.mjs": "./eslint/base.mjs",
+    "./prettier/base.mjs": "./prettier/base.mjs",
+    "./env": "./src/env.ts"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsc -w -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node -e \"console.log('no tests for @agentj/config')\"",
+    "lint": "eslint src --max-warnings=0"
+  },
+  "dependencies": {
+    "@eslint/js": "^9.34.0",
+    "typescript-eslint": "^8.41.0",
+    "zod": "^4.1.5"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.2",
+    "eslint": "^9.34.0",
+    "@types/node": "^24.3.0"
+  }
+}
