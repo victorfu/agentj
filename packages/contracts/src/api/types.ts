@@ -17,22 +17,8 @@ export interface MeResponse {
   memberships: ApiOrgMembership[];
 }
 
-export interface Project {
-  id: string;
-  orgId: string;
-  name: string;
-  requestLogsEnabled: boolean;
-  createdAt: string;
-}
-
-export interface CreateProjectRequest {
-  orgId: string;
-  name: string;
-}
-
 export interface Tunnel {
   id: string;
-  projectId: string;
   subdomain: string;
   publicUrl: string;
   status: TunnelStatus;

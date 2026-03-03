@@ -1,10 +1,8 @@
 import type {
   ConnectTokenResponse,
-  CreateProjectRequest,
   CreateTunnelRequest,
   MeResponse,
   PaginatedTunnelRequestLogs,
-  Project,
   Tunnel,
   TunnelRequestLogDetail
 } from '@agentj/contracts';
@@ -16,6 +14,11 @@ export interface AgentjSdkOptions {
   baseUrl: string;
   token?: string;
   fetchImpl?: typeof fetch;
+}
+
+export interface ListRequestLogsQuery {
+  cursor?: string;
+  after?: string;
 }
 
 export class AgentjApiClient {
@@ -37,44 +40,52 @@ export class AgentjApiClient {
     return this.#request('/api/v1/me', 'GET');
   }
 
-  async listProjects(): Promise<Project[]> {
-    return this.#request('/api/v1/projects', 'GET');
+  async listTunnels(): Promise<Tunnel[]> {
+    return this.#request('/api/v1/tunnels', 'GET');
   }
 
-  async createProject(input: CreateProjectRequest): Promise<Project> {
-    return this.#request('/api/v1/projects', 'POST', input);
+  async createTunnel(input: CreateTunnelRequest): Promise<Tunnel> {
+    return this.#request('/api/v1/tunnels', 'POST', input);
   }
 
-  async listTunnels(projectId: string): Promise<Tunnel[]> {
-    return this.#request(`/api/v1/projects/${projectId}/tunnels`, 'GET');
+  async createConnectToken(tunnelId: string): Promise<ConnectTokenResponse> {
+    return this.#request(`/api/v1/tunnels/${tunnelId}/connect-token`, 'POST');
   }
 
-  async createTunnel(projectId: string, input: CreateTunnelRequest): Promise<Tunnel> {
-    return this.#request(`/api/v1/projects/${projectId}/tunnels`, 'POST', input);
+  async stopTunnel(tunnelId: string): Promise<void> {
+    await this.#request(`/api/v1/tunnels/${tunnelId}`, 'DELETE');
   }
 
-  async createConnectToken(projectId: string, tunnelId: string): Promise<ConnectTokenResponse> {
-    return this.#request(`/api/v1/projects/${projectId}/tunnels/${tunnelId}/connect-token`, 'POST');
-  }
-
-  async stopTunnel(projectId: string, tunnelId: string): Promise<void> {
-    await this.#request(`/api/v1/projects/${projectId}/tunnels/${tunnelId}`, 'DELETE');
-  }
-
-  async listRequestLogs(projectId: string, tunnelId: string, cursor?: string): Promise<PaginatedTunnelRequestLogs> {
-    const query = cursor ? `?cursor=${encodeURIComponent(cursor)}` : '';
-    return this.#request(`/api/v1/projects/${projectId}/tunnels/${tunnelId}/requests${query}`, 'GET');
-  }
-
-  async getRequestLogDetail(
-    projectId: string,
+  async listRequestLogs(
     tunnelId: string,
-    requestId: string
-  ): Promise<TunnelRequestLogDetail> {
-    return this.#request(
-      `/api/v1/projects/${projectId}/tunnels/${tunnelId}/requests/${requestId}`,
-      'GET'
-    );
+    query?: string | ListRequestLogsQuery
+  ): Promise<PaginatedTunnelRequestLogs> {
+    const queryParams =
+      typeof query === 'string'
+        ? { cursor: query, after: undefined }
+        : {
+            cursor: query?.cursor,
+            after: query?.after
+          };
+
+    if (queryParams.cursor && queryParams.after) {
+      throw new Error('listRequestLogs accepts either cursor or after, not both');
+    }
+
+    const urlParams = new URLSearchParams();
+    if (queryParams.cursor) {
+      urlParams.set('cursor', queryParams.cursor);
+    }
+    if (queryParams.after) {
+      urlParams.set('after', queryParams.after);
+    }
+
+    const suffix = urlParams.size > 0 ? `?${urlParams.toString()}` : '';
+    return this.#request(`/api/v1/tunnels/${tunnelId}/requests${suffix}`, 'GET');
+  }
+
+  async getRequestLogDetail(tunnelId: string, requestId: string): Promise<TunnelRequestLogDetail> {
+    return this.#request(`/api/v1/tunnels/${tunnelId}/requests/${requestId}`, 'GET');
   }
 
   async #request<T>(path: string, method: HttpMethod, body?: unknown): Promise<T> {

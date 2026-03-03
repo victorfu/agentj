@@ -1,18 +1,17 @@
-import { Command, Flags } from '@oclif/core';
+import { Command } from '@oclif/core';
 
 import { loadApiClient } from '../../lib/client.js';
+import { ensureLoggedIn } from '../../lib/project.js';
 
 export default class TunnelList extends Command {
-  static description = 'List tunnels in a project';
-
-  static flags = {
-    project: Flags.string({ required: true, description: 'Project ID' })
-  };
+  static description = 'List accessible tunnels';
 
   async run(): Promise<void> {
-    const { flags } = await this.parse(TunnelList);
+    await this.parse(TunnelList);
     const client = await loadApiClient();
-    const tunnels = await client.listTunnels(flags.project);
+
+    ensureLoggedIn(client);
+    const tunnels = await client.listTunnels();
     this.log(JSON.stringify(tunnels, null, 2));
   }
 }

@@ -2,7 +2,6 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 
 export interface ConnectTokenPayload {
   userId: string;
-  projectId: string;
   tunnelId: string;
   exp: number;
 }

@@ -26,6 +26,8 @@ services:
     environment:
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/agentj
       AGENTJ_TUNNEL_BASE_DOMAIN: tunnel.localhost
+      AGENTJ_TUNNEL_PUBLIC_SCHEME: https
+      AGENTJ_TUNNEL_PUBLIC_PORT: 443
       AGENTJ_CONNECT_TOKEN_SECRET: change-me-in-production-secret
       AGENTJ_GATEWAY_WS_PUBLIC_URL: ws://localhost:4000/agent/v1/connect
     depends_on:
@@ -49,6 +51,7 @@ services:
       AGENTJ_CONNECT_TOKEN_SECRET: change-me-in-production-secret
       PORT: 4000
       AGENTJ_REQUEST_BODY_LIMIT_BYTES: 262144
+      AGENTJ_STREAM_TIMEOUT_MS: 60000
     depends_on:
       postgres:
         condition: service_healthy

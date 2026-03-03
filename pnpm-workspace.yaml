@@ -4,6 +4,7 @@ packages:
   - infra/*
 
 onlyBuiltDependencies:
+  - '@tailwindcss/oxide'
   - esbuild
   - keytar
   - sharp

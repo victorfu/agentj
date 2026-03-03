@@ -7,7 +7,8 @@
     "AGENTJ_GATEWAY_WS_PUBLIC_URL",
     "AGENTJ_APP_BASE_URL",
     "AGENTJ_TUNNEL_BASE_DOMAIN",
-    "AGENTJ_CONNECT_TOKEN_SECRET"
+    "AGENTJ_CONNECT_TOKEN_SECRET",
+    "AGENTJ_STREAM_TIMEOUT_MS"
   ],
   "tasks": {
     "build": {
@@ -20,7 +21,7 @@
     },
     "test": {
       "dependsOn": ["^build"],
-      "outputs": ["coverage/**"]
+      "outputs": []
     },
     "lint": {
       "outputs": []

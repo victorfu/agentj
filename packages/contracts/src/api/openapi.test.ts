@@ -5,8 +5,8 @@ import openapi from './openapi.json' with { type: 'json' };
 describe('openapi contract', () => {
   it('contains required control plane endpoints', () => {
     expect(openapi.paths).toHaveProperty('/api/v1/me');
-    expect(openapi.paths).toHaveProperty('/api/v1/projects');
-    expect(openapi.paths).toHaveProperty('/api/v1/projects/{projectId}/tunnels');
-    expect(openapi.paths).toHaveProperty('/api/v1/projects/{projectId}/tunnels/{tunnelId}/connect-token');
+    expect(openapi.paths).toHaveProperty('/api/v1/pats/dev');
+    expect(openapi.paths).toHaveProperty('/api/v1/tunnels');
+    expect(openapi.paths).toHaveProperty('/api/v1/tunnels/{tunnelId}/connect-token');
   });
 });

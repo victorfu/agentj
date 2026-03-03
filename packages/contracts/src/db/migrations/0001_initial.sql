@@ -44,14 +44,6 @@ CREATE TABLE IF NOT EXISTS org_memberships (
   UNIQUE (user_id, org_id)
 );
 
-CREATE TABLE IF NOT EXISTS projects (
-  id TEXT PRIMARY KEY,
-  org_id TEXT NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
-  name TEXT NOT NULL,
-  request_logs_enabled BOOLEAN NOT NULL DEFAULT TRUE,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
 CREATE TABLE IF NOT EXISTS pat_tokens (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -65,7 +57,7 @@ CREATE TABLE IF NOT EXISTS pat_tokens (
 
 CREATE TABLE IF NOT EXISTS tunnels (
   id TEXT PRIMARY KEY,
-  project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  org_id TEXT NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
   subdomain TEXT NOT NULL UNIQUE,
   status tunnel_status NOT NULL DEFAULT 'offline',
   target_host TEXT NOT NULL,
@@ -119,7 +111,6 @@ CREATE TABLE IF NOT EXISTS audit_logs (
   id TEXT PRIMARY KEY,
   user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
   org_id TEXT REFERENCES orgs(id) ON DELETE SET NULL,
-  project_id TEXT REFERENCES projects(id) ON DELETE SET NULL,
   action TEXT NOT NULL,
   metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()

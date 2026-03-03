@@ -1,6 +1,7 @@
-import { Args, Command, Flags } from '@oclif/core';
+import { Args, Command } from '@oclif/core';
 
 import { loadApiClient } from '../../lib/client.js';
+import { ensureLoggedIn } from '../../lib/project.js';
 
 export default class TunnelStop extends Command {
   static description = 'Stop a tunnel';
@@ -9,14 +10,12 @@ export default class TunnelStop extends Command {
     tunnelId: Args.string({ required: true, description: 'Tunnel ID to stop' })
   };
 
-  static flags = {
-    project: Flags.string({ required: true, description: 'Project ID' })
-  };
-
   async run(): Promise<void> {
-    const { args, flags } = await this.parse(TunnelStop);
+    const { args } = await this.parse(TunnelStop);
     const client = await loadApiClient();
-    await client.stopTunnel(flags.project, args.tunnelId);
+
+    ensureLoggedIn(client);
+    await client.stopTunnel(args.tunnelId);
     this.log(`Stopped tunnel ${args.tunnelId}`);
   }
 }

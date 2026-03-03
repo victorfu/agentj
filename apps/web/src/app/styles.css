@@ -1,0 +1,24 @@
+@import "tailwindcss";
+
+@theme {
+  --color-agentj-bg: #f4f1ea;
+  --color-agentj-ink: #1f1b17;
+  --color-agentj-panel: #fffaf1;
+  --color-agentj-muted: #665f57;
+  --color-agentj-accent: #0b6b5e;
+  --color-agentj-border: #d8cdbc;
+}
+
+@layer base {
+  body {
+    font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+    color: var(--color-agentj-ink);
+    background: radial-gradient(circle at 0% 0%, #ffffff 0%, var(--color-agentj-bg) 45%, #efe2d2 100%);
+  }
+
+  h1,
+  h2 {
+    font-family: "Space Grotesk", "Avenir Next", sans-serif;
+    letter-spacing: -0.02em;
+  }
+}

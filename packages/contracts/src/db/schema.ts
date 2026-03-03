@@ -44,16 +44,6 @@ export const orgMemberships = pgTable(
   })
 );
 
-export const projects = pgTable('projects', {
-  id: text('id').primaryKey(),
-  orgId: text('org_id')
-    .notNull()
-    .references(() => orgs.id, { onDelete: 'cascade' }),
-  name: text('name').notNull(),
-  requestLogsEnabled: boolean('request_logs_enabled').notNull().default(true),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
-});
-
 export const patTokens = pgTable('pat_tokens', {
   id: text('id').primaryKey(),
   userId: text('user_id')
@@ -69,9 +59,9 @@ export const patTokens = pgTable('pat_tokens', {
 
 export const tunnels = pgTable('tunnels', {
   id: text('id').primaryKey(),
-  projectId: text('project_id')
+  orgId: text('org_id')
     .notNull()
-    .references(() => projects.id, { onDelete: 'cascade' }),
+    .references(() => orgs.id, { onDelete: 'cascade' }),
   subdomain: text('subdomain').notNull().unique(),
   status: tunnelStatusEnum('status').notNull().default('offline'),
   targetHost: text('target_host').notNull(),
@@ -133,7 +123,6 @@ export const auditLogs = pgTable('audit_logs', {
   id: text('id').primaryKey(),
   userId: text('user_id').references(() => users.id, { onDelete: 'set null' }),
   orgId: text('org_id').references(() => orgs.id, { onDelete: 'set null' }),
-  projectId: text('project_id').references(() => projects.id, { onDelete: 'set null' }),
   action: text('action').notNull(),
   metadata: jsonb('metadata').$type<Record<string, unknown>>().notNull().default({}),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()

@@ -1,7 +1,4 @@
 #!/usr/bin/env node
-import { run } from '@oclif/core';
+import { execute } from '@oclif/core';
 
-run().catch((error) => {
-  console.error(error);
-  process.exitCode = 1;
-});
+await execute({ dir: import.meta.url });

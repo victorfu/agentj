@@ -17,8 +17,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint src scripts --max-warnings=0",
     "test": "vitest run",
-    "db:migrate": "tsx scripts/migrate.ts",
-    "db:seed": "tsx scripts/seed.ts"
+    "db:migrate": "node --env-file=../../.env --import tsx scripts/migrate.ts",
+    "db:seed": "node --env-file=../../.env --import tsx scripts/seed.ts"
   },
   "dependencies": {
     "drizzle-orm": "^0.44.5",

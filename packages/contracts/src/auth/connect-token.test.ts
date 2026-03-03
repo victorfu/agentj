@@ -7,7 +7,6 @@ describe('connect token', () => {
     const token = createConnectToken(
       {
         userId: 'u1',
-        projectId: 'p1',
         tunnelId: 't1',
         exp: Math.floor(Date.now() / 1000) + 60
       },

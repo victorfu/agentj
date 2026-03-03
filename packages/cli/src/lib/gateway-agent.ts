@@ -1,4 +1,4 @@
-import { request as httpRequest } from 'node:http';
+import { request as httpRequest, type ClientRequest } from 'node:http';
 import { request as httpsRequest } from 'node:https';
 import { URL } from 'node:url';
 
@@ -8,7 +8,6 @@ import type {
   AgentResponseEndMessage,
   AgentResponseStartMessage,
   GatewayMessage,
-  IngressRequestChunkMessage,
   IngressRequestStartMessage,
   PingMessage,
   PongMessage,
@@ -27,13 +26,42 @@ interface AgentOptions {
 }
 
 interface PendingHttpStream {
-  start: IngressRequestStartMessage;
-  chunks: IngressRequestChunkMessage[];
+  request: ClientRequest;
+  ended: boolean;
 }
 
 interface PendingWsStream {
   socket: WebSocket;
   chunkIndex: number;
+}
+
+export interface GatewayCloseAction {
+  shouldExitNonZero: boolean;
+  message: string;
+}
+
+export function mapGatewayCloseAction(code: number): GatewayCloseAction | null {
+  if (code === 4404) {
+    return {
+      shouldExitNonZero: true,
+      message:
+        'Gateway rejected tunnel registration (4404): tunnel ID was not found in gateway DB.\n' +
+        'Check that web and gateway share the same environment values:\n' +
+        '- DATABASE_URL\n' +
+        '- AGENTJ_TUNNEL_BASE_DOMAIN\n' +
+        '- AGENTJ_CONNECT_TOKEN_SECRET\n' +
+        '- AGENTJ_GATEWAY_WS_PUBLIC_URL'
+    };
+  }
+
+  if (code === 4410) {
+    return {
+      shouldExitNonZero: true,
+      message: 'Tunnel offline or superseded (4410). The tunnel agent is not active for this tunnel.'
+    };
+  }
+
+  return null;
 }
 
 export async function runAgent(options: AgentOptions): Promise<void> {
@@ -66,14 +94,30 @@ export async function runAgent(options: AgentOptions): Promise<void> {
       return;
     }
 
-    void handleMessage(incoming);
+    handleMessage(incoming).catch((error: unknown) => {
+      console.error('agent message handler failed', error);
+      ws.close(1011, 'Agent message handler failed');
+    });
   });
 
-  ws.on('close', () => {
+  ws.on('close', (code) => {
+    for (const stream of pendingHttp.values()) {
+      stream.request.destroy();
+    }
+    pendingHttp.clear();
+
     for (const stream of pendingWs.values()) {
       stream.socket.close();
     }
     pendingWs.clear();
+
+    const closeAction = mapGatewayCloseAction(code);
+    if (closeAction) {
+      console.error(closeAction.message);
+      if (closeAction.shouldExitNonZero) {
+        process.exitCode = 1;
+      }
+    }
   });
 
   async function handleMessage(message: GatewayMessage): Promise<void> {
@@ -102,7 +146,7 @@ export async function runAgent(options: AgentOptions): Promise<void> {
             ws.send(serializeGatewayMessage(streamError));
           }
         } else {
-          pendingHttp.set(message.streamId, { start: message, chunks: [] });
+          startHttpExchange(ws, message, options.targetHost, options.targetPort, pendingHttp);
         }
         return;
       }
@@ -118,8 +162,12 @@ export async function runAgent(options: AgentOptions): Promise<void> {
         }
 
         const httpStream = pendingHttp.get(message.streamId);
-        if (httpStream) {
-          httpStream.chunks.push(message);
+        if (httpStream && !httpStream.ended) {
+          if (message.isBinary) {
+            httpStream.request.write(Buffer.from(message.dataBase64 ?? '', 'base64'));
+          } else {
+            httpStream.request.write(message.dataText ?? '', 'utf8');
+          }
         }
         return;
       }
@@ -132,15 +180,9 @@ export async function runAgent(options: AgentOptions): Promise<void> {
         }
 
         const httpStream = pendingHttp.get(message.streamId);
-        if (httpStream) {
-          pendingHttp.delete(message.streamId);
-          await handleHttpExchange(
-            ws,
-            httpStream.start,
-            httpStream.chunks,
-            options.targetHost,
-            options.targetPort
-          );
+        if (httpStream && !httpStream.ended) {
+          httpStream.ended = true;
+          httpStream.request.end();
         }
         return;
       }
@@ -222,20 +264,18 @@ export async function runAgent(options: AgentOptions): Promise<void> {
   });
 }
 
-async function handleHttpExchange(
+function startHttpExchange(
   gatewaySocket: WebSocket,
   start: IngressRequestStartMessage,
-  chunks: IngressRequestChunkMessage[],
   targetHost: string,
-  targetPort: number
-): Promise<void> {
-  const body = Buffer.concat(
-    chunks.map((chunk) =>
-      chunk.isBinary
-        ? Buffer.from(chunk.dataBase64 ?? '', 'base64')
-        : Buffer.from(chunk.dataText ?? '', 'utf8')
-    )
-  );
+  targetPort: number,
+  pendingHttp: Map<string, PendingHttpStream>
+): void {
+  const existing = pendingHttp.get(start.streamId);
+  if (existing) {
+    existing.request.destroy();
+    pendingHttp.delete(start.streamId);
+  }
 
   const localProtocol = process.env.AGENTJ_LOCAL_HTTP_SCHEME ?? 'http';
   const localUrl = new URL(`${localProtocol}://${targetHost}:${targetPort}${start.path}`);
@@ -246,62 +286,59 @@ async function handleHttpExchange(
 
   const requestFn = localUrl.protocol === 'https:' ? httpsRequest : httpRequest;
 
-  await new Promise<void>((resolve) => {
-    const req = requestFn(
-      localUrl,
-      {
-        method: start.method,
-        headers: requestHeaders
-      },
-      (res) => {
-        const startMessage: AgentResponseStartMessage = {
-          type: 'agent_response_start',
-          streamId: start.streamId,
-          statusCode: res.statusCode ?? 502,
-          headers: toHeaderRecord(res.headers)
-        };
-        gatewaySocket.send(serializeGatewayMessage(startMessage));
-
-        let chunkIndex = 0;
-
-        res.on('data', (chunk: Buffer) => {
-          const chunkMessage: AgentResponseChunkMessage = {
-            type: 'agent_response_chunk',
-            streamId: start.streamId,
-            chunkIndex,
-            isBinary: true,
-            dataBase64: chunk.toString('base64')
-          };
-          chunkIndex += 1;
-          gatewaySocket.send(serializeGatewayMessage(chunkMessage));
-        });
-
-        res.on('end', () => {
-          const endMessage: AgentResponseEndMessage = {
-            type: 'agent_response_end',
-            streamId: start.streamId
-          };
-          gatewaySocket.send(serializeGatewayMessage(endMessage));
-          resolve();
-        });
-      }
-    );
-
-    req.on('error', (error) => {
-      const streamError: StreamErrorMessage = {
-        type: 'stream_error',
+  const req = requestFn(
+    localUrl,
+    {
+      method: start.method,
+      headers: requestHeaders
+    },
+    (res) => {
+      const startMessage: AgentResponseStartMessage = {
+        type: 'agent_response_start',
         streamId: start.streamId,
-        message: error.message
+        statusCode: res.statusCode ?? 502,
+        headers: toHeaderRecord(res.headers)
       };
-      gatewaySocket.send(serializeGatewayMessage(streamError));
-      resolve();
-    });
+      gatewaySocket.send(serializeGatewayMessage(startMessage));
 
-    if (body.length > 0) {
-      req.write(body);
+      let chunkIndex = 0;
+
+      res.on('data', (chunk: Buffer) => {
+        const chunkMessage: AgentResponseChunkMessage = {
+          type: 'agent_response_chunk',
+          streamId: start.streamId,
+          chunkIndex,
+          isBinary: true,
+          dataBase64: chunk.toString('base64')
+        };
+        chunkIndex += 1;
+        gatewaySocket.send(serializeGatewayMessage(chunkMessage));
+      });
+
+      res.on('end', () => {
+        const endMessage: AgentResponseEndMessage = {
+          type: 'agent_response_end',
+          streamId: start.streamId
+        };
+        gatewaySocket.send(serializeGatewayMessage(endMessage));
+        pendingHttp.delete(start.streamId);
+      });
     }
+  );
 
-    req.end();
+  req.on('error', (error) => {
+    const streamError: StreamErrorMessage = {
+      type: 'stream_error',
+      streamId: start.streamId,
+      message: error.message
+    };
+    gatewaySocket.send(serializeGatewayMessage(streamError));
+    pendingHttp.delete(start.streamId);
+  });
+
+  pendingHttp.set(start.streamId, {
+    request: req,
+    ended: false
   });
 }
 

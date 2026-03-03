@@ -1,3 +1,6 @@
-import { run } from '@oclif/core';
+import { execute } from '@oclif/core';
 
-await run();
+await execute({
+  development: true,
+  dir: import.meta.url
+});

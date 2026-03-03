@@ -37,6 +37,12 @@ import {
 } from '@agentj/contracts';
 
 import { loadGatewayEnv } from './lib/env.js';
+import { toOutgoingHttpHeaders } from './lib/http-headers.js';
+import {
+  buildTunnelHostContext,
+  resolveTunnelSubdomain,
+  unknownTunnelClosePayload
+} from './lib/tunnel-routing.js';
 
 const env = loadGatewayEnv(process.env);
 
@@ -77,6 +83,7 @@ interface StreamState {
   responseTruncated: boolean;
   startedAtMs: number;
   protocol: 'http' | 'ws';
+  timeoutHandle?: NodeJS.Timeout;
 }
 
 const agentsByTunnel = new Map<string, AgentConnection>();
@@ -93,8 +100,45 @@ const REDACT_HEADERS = new Set([
 const REQUEST_LOG_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 const CLEANUP_BATCH_SIZE = 1000;
 
+function runSafely(promise: Promise<unknown>, context: string): void {
+  promise.catch((error: unknown) => {
+    app.log.error({ context, error }, 'async task failed');
+  });
+}
+
+function armStreamTimeout(state: StreamState): void {
+  if (state.timeoutHandle) {
+    clearTimeout(state.timeoutHandle);
+  }
+
+  state.timeoutHandle = setTimeout(() => {
+    runSafely(
+      failStream(state.streamId, 504, 'STREAM_TIMEOUT', 'Stream timed out waiting for agent response'),
+      `stream_timeout:${state.streamId}`
+    );
+  }, env.AGENTJ_STREAM_TIMEOUT_MS);
+  state.timeoutHandle.unref();
+}
+
+function clearStreamTimeout(state: StreamState): void {
+  if (state.timeoutHandle) {
+    clearTimeout(state.timeoutHandle);
+    state.timeoutHandle = undefined;
+  }
+}
+
+function failActiveStreamsForTunnel(tunnelId: string, reason: string): void {
+  for (const state of streams.values()) {
+    if (state.tunnelId !== tunnelId) {
+      continue;
+    }
+
+    runSafely(failStream(state.streamId, 502, 'TUNNEL_OFFLINE', reason), `fail_stream:${state.streamId}`);
+  }
+}
+
 setInterval(() => {
-  void cleanupOldRequestLogs();
+  runSafely(cleanupOldRequestLogs(), 'cleanup_old_request_logs');
 }, 24 * 60 * 60 * 1000).unref();
 
 app.get('/healthz', async () => {
@@ -103,14 +147,15 @@ app.get('/healthz', async () => {
 });
 
 app.get('/agent/v1/connect', { websocket: true }, (socket, req) => {
-  void handleAgentConnection(socket, req);
+  runSafely(handleAgentConnection(socket, req), 'handle_agent_connection');
 });
 
 async function handleHttpIngress(request: FastifyRequest, reply: FastifyReply): Promise<void> {
-  const host = (request.headers.host ?? '').split(':')[0] ?? '';
-  const tunnel = await resolveTunnelByHost(host);
+  const hostContext = buildTunnelHostContext(request.headers.host, env.AGENTJ_TUNNEL_BASE_DOMAIN);
+  const tunnel = await resolveTunnelByHost(hostContext.parsedHost);
 
   if (!tunnel) {
+    app.log.warn(hostContext, 'no tunnel found for ingress host');
     reply.code(404).send({
       error: {
         code: 'TUNNEL_NOT_FOUND',
@@ -150,13 +195,14 @@ async function handleHttpIngress(request: FastifyRequest, reply: FastifyReply): 
   };
 
   streams.set(streamId, state);
+  armStreamTimeout(state);
 
   await db.insert(ingressRequests).values({
     id: requestId,
     tunnelId: tunnel.id,
     streamId,
     method: request.method,
-    host,
+    host: hostContext.parsedHost,
     path: request.url.split('?')[0] ?? '/',
     query: request.url.includes('?') ? request.url.split('?')[1] ?? '' : '',
     requestHeaders: redactHeaders(request.headers),
@@ -176,6 +222,7 @@ async function handleHttpIngress(request: FastifyRequest, reply: FastifyReply): 
   agent.socket.send(serializeGatewayMessage(startMessage));
 
   for await (const chunk of request.raw) {
+    armStreamTimeout(state);
     const buf = Buffer.from(chunk as Buffer);
     const chunkMessage: IngressRequestChunkMessage = {
       type: 'ingress_request_chunk',
@@ -214,14 +261,13 @@ app.route({
   method: 'GET',
   url: '/*',
   handler: handleHttpIngress,
-  websocket: true,
   wsHandler: (socket, request) => {
-    void handlePublicWebsocket(socket, request);
+    runSafely(handlePublicWebsocket(socket, request), 'handle_public_websocket');
   }
 });
 
 app.route({
-  method: ['POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'],
+  method: ['POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   url: '/*',
   handler: handleHttpIngress
 });
@@ -249,65 +295,98 @@ async function handleAgentConnection(socket: WebSocket, req: FastifyRequest): Pr
   socket.on('message', (raw) => {
     let message: GatewayMessage;
     try {
-      message = parseGatewayMessage(raw.toString());
+      message = parseGatewayMessage(rawDataToBuffer(raw).toString('utf8'));
     } catch (error) {
       app.log.warn({ error }, 'Malformed agent websocket message');
       socket.close(4400, 'Malformed websocket message');
       return;
     }
 
-    void handleAgentMessage(activeConnection, message);
+    runSafely(handleAgentMessage(activeConnection, message), `handle_agent_message:${message.type}`);
 
     if (message.type === 'agent_hello') {
-      const existing = agentsByTunnel.get(payload.tunnelId);
-      if (existing && existing.sessionId !== sessionId) {
-        existing.socket.close(4001, 'Superseded by newer agent session');
-      }
+      runSafely(
+        (async () => {
+          const foundTunnel = await db.query.tunnels.findFirst({
+            where: eq(tunnels.id, payload.tunnelId),
+            columns: { id: true }
+          });
+          const closePayload = unknownTunnelClosePayload(Boolean(foundTunnel));
+          if (closePayload) {
+            app.log.warn(
+              { tunnelId: payload.tunnelId, sessionId },
+              'rejecting agent hello: tunnel id not found in gateway db'
+            );
+            socket.close(closePayload.code, closePayload.reason);
+            return;
+          }
 
-      activeConnection = {
-        tunnelId: payload.tunnelId,
-        agentInstanceId: message.agentInstanceId,
-        sessionId,
-        socket
-      };
+          const existing = agentsByTunnel.get(payload.tunnelId);
+          if (existing && existing.sessionId !== sessionId) {
+            existing.socket.close(4001, 'Superseded by newer agent session');
+          }
 
-      agentsByTunnel.set(payload.tunnelId, activeConnection);
+          activeConnection = {
+            tunnelId: payload.tunnelId,
+            agentInstanceId: message.agentInstanceId,
+            sessionId,
+            socket
+          };
 
-      void db.insert(tunnelSessions).values({
-        id: sessionId,
-        tunnelId: payload.tunnelId,
-        agentInstanceId: message.agentInstanceId
-      });
+          agentsByTunnel.set(payload.tunnelId, activeConnection);
 
-      void db
-        .update(tunnels)
-        .set({ status: 'online', updatedAt: new Date() })
-        .where(eq(tunnels.id, payload.tunnelId));
+          runSafely(
+            db.insert(tunnelSessions).values({
+              id: sessionId,
+              tunnelId: payload.tunnelId,
+              agentInstanceId: message.agentInstanceId
+            }),
+            `insert_tunnel_session:${sessionId}`
+          );
 
-      socket.send(
-        serializeGatewayMessage({
-          type: 'agent_ready',
-          tunnelId: payload.tunnelId
-        })
+          runSafely(
+            db
+              .update(tunnels)
+              .set({ status: 'online', updatedAt: new Date() })
+              .where(eq(tunnels.id, payload.tunnelId)),
+            `mark_tunnel_online:${payload.tunnelId}`
+          );
+
+          socket.send(
+            serializeGatewayMessage({
+              type: 'agent_ready',
+              tunnelId: payload.tunnelId
+            })
+          );
+        })(),
+        `register_agent_hello:${payload.tunnelId}`
       );
     }
 
     if (message.type === 'pong') {
-      void db
-        .update(tunnelSessions)
-        .set({ lastHeartbeatAt: new Date() })
-        .where(eq(tunnelSessions.id, sessionId));
+      runSafely(
+        db
+          .update(tunnelSessions)
+          .set({ lastHeartbeatAt: new Date() })
+          .where(eq(tunnelSessions.id, sessionId)),
+        `heartbeat:${sessionId}`
+      );
     }
   });
 
   const pingTimer = setInterval(() => {
-    socket.send(
-      serializeGatewayMessage({
-        type: 'ping',
-        ts: Date.now()
-      })
-    );
+    try {
+      socket.send(
+        serializeGatewayMessage({
+          type: 'ping',
+          ts: Date.now()
+        })
+      );
+    } catch (error) {
+      app.log.warn({ error, sessionId }, 'failed to send websocket ping');
+    }
   }, 30000);
+  pingTimer.unref();
 
   socket.on('close', () => {
     clearInterval(pingTimer);
@@ -316,18 +395,25 @@ async function handleAgentConnection(socket: WebSocket, req: FastifyRequest): Pr
       const latest = agentsByTunnel.get(activeConnection.tunnelId);
       if (latest?.sessionId === activeConnection.sessionId) {
         agentsByTunnel.delete(activeConnection.tunnelId);
+        failActiveStreamsForTunnel(activeConnection.tunnelId, 'Agent disconnected');
 
-        void db
-          .update(tunnels)
-          .set({ status: 'offline', updatedAt: new Date() })
-          .where(eq(tunnels.id, activeConnection.tunnelId));
+        runSafely(
+          db
+            .update(tunnels)
+            .set({ status: 'offline', updatedAt: new Date() })
+            .where(eq(tunnels.id, activeConnection.tunnelId)),
+          `mark_tunnel_offline:${activeConnection.tunnelId}`
+        );
       }
     }
 
-    void db
-      .update(tunnelSessions)
-      .set({ disconnectReason: 'socket_closed' })
-      .where(eq(tunnelSessions.id, sessionId));
+    runSafely(
+      db
+        .update(tunnelSessions)
+        .set({ disconnectReason: 'socket_closed' })
+        .where(eq(tunnelSessions.id, sessionId)),
+      `disconnect_session:${sessionId}`
+    );
   });
 }
 
@@ -335,10 +421,11 @@ async function handlePublicWebsocket(
   socket: WebSocket,
   request: FastifyRequest
 ): Promise<void> {
-  const host = (request.headers.host ?? '').split(':')[0] ?? '';
-  const tunnel = await resolveTunnelByHost(host);
+  const hostContext = buildTunnelHostContext(request.headers.host, env.AGENTJ_TUNNEL_BASE_DOMAIN);
+  const tunnel = await resolveTunnelByHost(hostContext.parsedHost);
 
   if (!tunnel) {
+    app.log.warn(hostContext, 'no tunnel found for websocket host');
     socket.close(4404, 'Tunnel not found');
     return;
   }
@@ -368,13 +455,14 @@ async function handlePublicWebsocket(
   };
 
   streams.set(streamId, state);
+  armStreamTimeout(state);
 
   await db.insert(ingressRequests).values({
     id: requestId,
     tunnelId: tunnel.id,
     streamId,
     method: request.method,
-    host,
+    host: hostContext.parsedHost,
     path: request.url.split('?')[0] ?? '/',
     query: request.url.includes('?') ? (request.url.split('?')[1] ?? '') : '',
     requestHeaders: redactHeaders(request.headers),
@@ -394,6 +482,7 @@ async function handlePublicWebsocket(
   agent.socket.send(serializeGatewayMessage(startMessage));
 
   socket.on('message', (payload, isBinary) => {
+    armStreamTimeout(state);
     const payloadBuffer = rawDataToBuffer(payload);
     const chunkMessage: IngressRequestChunkMessage = {
       type: 'ingress_request_chunk',
@@ -408,7 +497,10 @@ async function handlePublicWebsocket(
     agent.socket.send(serializeGatewayMessage(chunkMessage));
 
     const data = isBinary ? payloadBuffer : Buffer.from(payloadBuffer.toString('utf8'), 'utf8');
-    void persistChunk(state, 'request', chunkMessage.chunkIndex, data, isBinary, null);
+    runSafely(
+      persistChunk(state, 'request', chunkMessage.chunkIndex, data, isBinary, null),
+      `persist_request_chunk:${streamId}:${chunkMessage.chunkIndex}`
+    );
   });
 
   socket.on('close', () => {
@@ -418,7 +510,7 @@ async function handlePublicWebsocket(
     };
 
     agent.socket.send(serializeGatewayMessage(endMessage));
-    void finalizeStream(streamId, null, null);
+    runSafely(finalizeStream(streamId, null, null), `finalize_stream:${streamId}`);
   });
 }
 
@@ -469,19 +561,16 @@ async function onAgentResponseStart(message: AgentResponseStartMessage): Promise
   if (!state) {
     return;
   }
+  armStreamTimeout(state);
+
+  if (state.protocol === 'http' && state.reply && !state.reply.raw.headersSent) {
+    state.reply.raw.writeHead(message.statusCode, toOutgoingHttpHeaders(message.headers));
+  }
 
   await db
     .update(ingressRequests)
     .set({ statusCode: message.statusCode, responseHeaders: redactHeaders(message.headers) })
     .where(eq(ingressRequests.id, state.requestId));
-
-  if (state.protocol === 'http' && state.reply) {
-    const headers: Record<string, string> = {};
-    for (const [key, value] of Object.entries(message.headers)) {
-      headers[key] = Array.isArray(value) ? value.join(',') : value;
-    }
-    state.reply.raw.writeHead(message.statusCode, headers);
-  }
 }
 
 async function onAgentResponseChunk(message: AgentResponseChunkMessage): Promise<void> {
@@ -489,6 +578,7 @@ async function onAgentResponseChunk(message: AgentResponseChunkMessage): Promise
   if (!state) {
     return;
   }
+  armStreamTimeout(state);
 
   const data = message.isBinary
     ? Buffer.from(message.dataBase64 ?? '', 'base64')
@@ -523,26 +613,39 @@ async function onAgentResponseEnd(message: AgentResponseEndMessage): Promise<voi
 }
 
 async function onStreamError(message: StreamErrorMessage): Promise<void> {
-  const state = streams.get(message.streamId);
+  await failStream(message.streamId, 502, 'UPSTREAM_STREAM_ERROR', message.message);
+}
+
+async function failStream(
+  streamId: string,
+  statusCode: number,
+  errorCode: string,
+  errorMessage: string
+): Promise<void> {
+  const state = streams.get(streamId);
   if (!state) {
     return;
   }
 
-  if (state.protocol === 'http' && state.reply) {
-    state.reply.raw.statusCode = 502;
+  if (state.protocol === 'http' && state.reply && !state.reply.raw.writableEnded) {
+    state.reply.raw.statusCode = statusCode;
     state.reply.raw.end(JSON.stringify({
       error: {
-        code: 'UPSTREAM_STREAM_ERROR',
-        message: message.message
+        code: errorCode,
+        message: errorMessage
       }
     }));
   }
 
-  if (state.protocol === 'ws' && state.wsSocket) {
-    state.wsSocket.close(1011, message.message);
+  if (
+    state.protocol === 'ws' &&
+    state.wsSocket &&
+    (state.wsSocket.readyState === 0 || state.wsSocket.readyState === 1)
+  ) {
+    state.wsSocket.close(1011, errorMessage);
   }
 
-  await finalizeStream(message.streamId, 502, message.message);
+  await finalizeStream(streamId, statusCode, errorMessage);
 }
 
 async function finalizeStream(
@@ -554,6 +657,7 @@ async function finalizeStream(
   if (!state) {
     return;
   }
+  clearStreamTimeout(state);
 
   const endedAt = new Date();
   const latencyMs = endedAt.getTime() - state.startedAtMs;
@@ -575,12 +679,7 @@ async function finalizeStream(
 }
 
 async function resolveTunnelByHost(host: string) {
-  const suffix = `.${env.AGENTJ_TUNNEL_BASE_DOMAIN}`;
-  if (!host.endsWith(suffix)) {
-    return null;
-  }
-
-  const subdomain = host.slice(0, -suffix.length);
+  const subdomain = resolveTunnelSubdomain(host, env.AGENTJ_TUNNEL_BASE_DOMAIN);
   if (!subdomain) {
     return null;
   }
@@ -699,11 +798,11 @@ const shutdown = async () => {
 };
 
 process.on('SIGINT', () => {
-  void shutdown();
+  runSafely(shutdown(), 'shutdown_sigint');
 });
 
 process.on('SIGTERM', () => {
-  void shutdown();
+  runSafely(shutdown(), 'shutdown_sigterm');
 });
 
 await app.listen({
