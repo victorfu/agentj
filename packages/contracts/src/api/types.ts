@@ -6,15 +6,8 @@ export interface ApiUser {
   name: string;
 }
 
-export interface ApiOrgMembership {
-  orgId: string;
-  orgName: string;
-  role: 'owner' | 'member';
-}
-
 export interface MeResponse {
   user: ApiUser;
-  memberships: ApiOrgMembership[];
 }
 
 export interface Tunnel {

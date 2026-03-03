@@ -271,6 +271,11 @@ function startHttpExchange(
   targetPort: number,
   pendingHttp: Map<string, PendingHttpStream>
 ): void {
+  const requestPath = start.query ? `${start.path}?${start.query}` : start.path;
+  const requestLine = `${start.method} ${requestPath}`;
+  const startedAtMs = Date.now();
+  console.log(`--> ${requestLine}`);
+
   const existing = pendingHttp.get(start.streamId);
   if (existing) {
     existing.request.destroy();
@@ -293,10 +298,11 @@ function startHttpExchange(
       headers: requestHeaders
     },
     (res) => {
+      const statusCode = res.statusCode ?? 502;
       const startMessage: AgentResponseStartMessage = {
         type: 'agent_response_start',
         streamId: start.streamId,
-        statusCode: res.statusCode ?? 502,
+        statusCode,
         headers: toHeaderRecord(res.headers)
       };
       gatewaySocket.send(serializeGatewayMessage(startMessage));
@@ -316,6 +322,8 @@ function startHttpExchange(
       });
 
       res.on('end', () => {
+        const durationMs = Date.now() - startedAtMs;
+        console.log(`<-- ${statusCode} ${requestLine} (${durationMs}ms)`);
         const endMessage: AgentResponseEndMessage = {
           type: 'agent_response_end',
           streamId: start.streamId
@@ -327,6 +335,8 @@ function startHttpExchange(
   );
 
   req.on('error', (error) => {
+    const durationMs = Date.now() - startedAtMs;
+    console.log(`<-- ERR ${requestLine} (${durationMs}ms): ${error.message}`);
     const streamError: StreamErrorMessage = {
       type: 'stream_error',
       streamId: start.streamId,

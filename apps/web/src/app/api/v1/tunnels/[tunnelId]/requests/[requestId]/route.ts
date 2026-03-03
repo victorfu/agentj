@@ -20,7 +20,7 @@ export async function GET(
   }
 
   const { tunnelId, requestId } = await context.params;
-  const tunnel = await findAccessibleTunnel(auth.userId, tunnelId);
+  const tunnel = await findAccessibleTunnel(auth.userId, tunnelId, auth.patTokenId);
   if (!tunnel) {
     return jsonError('NOT_FOUND', 'Tunnel not found', 404);
   }

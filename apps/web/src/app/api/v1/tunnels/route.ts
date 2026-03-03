@@ -9,7 +9,7 @@ import { requireAuth } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { getWebEnv } from '@/lib/env';
 import { jsonError, jsonNoStore } from '@/lib/http';
-import { listAccessibleTunnels, resolveDefaultOrgId } from '@/lib/tunnel-access';
+import { listAccessibleTunnels } from '@/lib/tunnel-access';
 
 const createTunnelSchema = z.object({
   targetHost: z.string().min(1),
@@ -58,7 +58,7 @@ export async function GET(request: NextRequest) {
     return jsonError('UNAUTHORIZED', 'Invalid PAT token', 401);
   }
 
-  const rows = await listAccessibleTunnels(auth.userId);
+  const rows = await listAccessibleTunnels(auth.userId, auth.patTokenId);
   return jsonNoStore(rows.map(serializeTunnel));
 }
 
@@ -66,11 +66,6 @@ export async function POST(request: NextRequest) {
   const auth = await requireAuth(request);
   if (!auth) {
     return jsonError('UNAUTHORIZED', 'Invalid PAT token', 401);
-  }
-
-  const orgId = await resolveDefaultOrgId(auth.userId);
-  if (!orgId) {
-    return jsonError('FORBIDDEN', 'No accessible organization for this PAT', 403);
   }
 
   let body: unknown;
@@ -93,7 +88,7 @@ export async function POST(request: NextRequest) {
         .insert(tunnels)
         .values({
           id: `tun_${randomUUID()}`,
-          orgId,
+          patTokenId: auth.patTokenId,
           subdomain,
           status: 'offline',
           targetHost: parsed.data.targetHost,
@@ -120,7 +115,6 @@ export async function POST(request: NextRequest) {
   await db.insert(auditLogs).values({
     id: `aud_${randomUUID()}`,
     userId: auth.userId,
-    orgId,
     action: 'tunnel.create',
     metadata: {
       tunnelId: createdTunnel.id,

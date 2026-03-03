@@ -24,7 +24,6 @@ services:
       pnpm --filter @agentj/contracts db:seed"
     environment:
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/agentj
-      SEED_PAT_TOKEN: ${SEED_PAT_TOKEN:-agentj_pat_dev_local_token}
     depends_on:
       postgres:
         condition: service_healthy

@@ -5,11 +5,9 @@ import {
   pgEnum,
   pgTable,
   text,
-  timestamp,
-  uniqueIndex
+  timestamp
 } from 'drizzle-orm/pg-core';
 
-export const membershipRoleEnum = pgEnum('membership_role', ['owner', 'member']);
 export const tunnelStatusEnum = pgEnum('tunnel_status', ['offline', 'online', 'stopped']);
 export const chunkDirectionEnum = pgEnum('chunk_direction', ['request', 'response']);
 
@@ -20,36 +18,13 @@ export const users = pgTable('users', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 });
 
-export const orgs = pgTable('orgs', {
-  id: text('id').primaryKey(),
-  name: text('name').notNull(),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
-});
-
-export const orgMemberships = pgTable(
-  'org_memberships',
-  {
-    id: text('id').primaryKey(),
-    orgId: text('org_id')
-      .notNull()
-      .references(() => orgs.id, { onDelete: 'cascade' }),
-    userId: text('user_id')
-      .notNull()
-      .references(() => users.id, { onDelete: 'cascade' }),
-    role: membershipRoleEnum('role').notNull().default('member'),
-    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
-  },
-  (table) => ({
-    userOrgUnique: uniqueIndex('org_memberships_user_org_unique').on(table.userId, table.orgId)
-  })
-);
-
 export const patTokens = pgTable('pat_tokens', {
   id: text('id').primaryKey(),
   userId: text('user_id')
     .notNull()
     .references(() => users.id, { onDelete: 'cascade' }),
   prefix: text('prefix').notNull(),
+  tokenPlaintext: text('token_plaintext'),
   tokenHash: text('token_hash').notNull().unique(),
   scopes: text('scopes').array().notNull().default([]),
   expiresAt: timestamp('expires_at', { withTimezone: true }),
@@ -59,9 +34,9 @@ export const patTokens = pgTable('pat_tokens', {
 
 export const tunnels = pgTable('tunnels', {
   id: text('id').primaryKey(),
-  orgId: text('org_id')
+  patTokenId: text('pat_token_id')
     .notNull()
-    .references(() => orgs.id, { onDelete: 'cascade' }),
+    .references(() => patTokens.id, { onDelete: 'cascade' }),
   subdomain: text('subdomain').notNull().unique(),
   status: tunnelStatusEnum('status').notNull().default('offline'),
   targetHost: text('target_host').notNull(),
@@ -122,7 +97,6 @@ export const ingressPayloadChunks = pgTable('ingress_payload_chunks', {
 export const auditLogs = pgTable('audit_logs', {
   id: text('id').primaryKey(),
   userId: text('user_id').references(() => users.id, { onDelete: 'set null' }),
-  orgId: text('org_id').references(() => orgs.id, { onDelete: 'set null' }),
   action: text('action').notNull(),
   metadata: jsonb('metadata').$type<Record<string, unknown>>().notNull().default({}),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()

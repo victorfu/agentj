@@ -1,13 +1,5 @@
 DO $$
 BEGIN
-  CREATE TYPE membership_role AS ENUM ('owner', 'member');
-EXCEPTION
-  WHEN duplicate_object THEN NULL;
-END
-$$;
-
-DO $$
-BEGIN
   CREATE TYPE tunnel_status AS ENUM ('offline', 'online', 'stopped');
 EXCEPTION
   WHEN duplicate_object THEN NULL;
@@ -29,25 +21,11 @@ CREATE TABLE IF NOT EXISTS users (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE TABLE IF NOT EXISTS orgs (
-  id TEXT PRIMARY KEY,
-  name TEXT NOT NULL,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS org_memberships (
-  id TEXT PRIMARY KEY,
-  org_id TEXT NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
-  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  role membership_role NOT NULL DEFAULT 'member',
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE (user_id, org_id)
-);
-
 CREATE TABLE IF NOT EXISTS pat_tokens (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   prefix TEXT NOT NULL,
+  token_plaintext TEXT,
   token_hash TEXT NOT NULL UNIQUE,
   scopes TEXT[] NOT NULL DEFAULT '{}',
   expires_at TIMESTAMPTZ,
@@ -57,7 +35,7 @@ CREATE TABLE IF NOT EXISTS pat_tokens (
 
 CREATE TABLE IF NOT EXISTS tunnels (
   id TEXT PRIMARY KEY,
-  org_id TEXT NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+  pat_token_id TEXT NOT NULL REFERENCES pat_tokens(id) ON DELETE CASCADE,
   subdomain TEXT NOT NULL UNIQUE,
   status tunnel_status NOT NULL DEFAULT 'offline',
   target_host TEXT NOT NULL,
@@ -110,7 +88,6 @@ CREATE TABLE IF NOT EXISTS ingress_payload_chunks (
 CREATE TABLE IF NOT EXISTS audit_logs (
   id TEXT PRIMARY KEY,
   user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
-  org_id TEXT REFERENCES orgs(id) ON DELETE SET NULL,
   action TEXT NOT NULL,
   metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()

@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
-import { and, eq } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { type NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 
@@ -23,14 +23,14 @@ export async function DELETE(
   }
 
   const { tunnelId } = await context.params;
-  const tunnel = await findAccessibleTunnel(auth.userId, tunnelId);
+  const tunnel = await findAccessibleTunnel(auth.userId, tunnelId, auth.patTokenId);
   if (!tunnel) {
     return jsonError('NOT_FOUND', 'Tunnel not found', 404);
   }
 
   const deleted = await db
     .delete(tunnels)
-    .where(and(eq(tunnels.id, tunnel.id), eq(tunnels.orgId, tunnel.orgId)))
+    .where(eq(tunnels.id, tunnel.id))
     .returning({ id: tunnels.id });
 
   if (deleted.length === 0) {
@@ -40,7 +40,6 @@ export async function DELETE(
   await db.insert(auditLogs).values({
     id: `aud_${randomUUID()}`,
     userId: auth.userId,
-    orgId: tunnel.orgId,
     action: 'tunnel.delete',
     metadata: {
       tunnelId: tunnel.id

@@ -40,10 +40,7 @@ docker compose -f infra/docker/docker-compose.db.yml down
 - Control API base: `http://app.localhost/api/v1`
 - Gateway WS endpoint: `ws://gateway:4000/agent/v1/connect`
 
-## Dev seed token
+## Seed behavior
 
-Seed script creates a dev PAT token default:
-
-`agentj_pat_dev_local_token`
-
-You can change it via `SEED_PAT_TOKEN` env when running seed.
+Seed script currently only ensures the default dev user (`dev@agentj.local`).
+Create PATs from the Web Dashboard.

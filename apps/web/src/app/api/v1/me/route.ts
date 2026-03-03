@@ -16,7 +16,6 @@ export async function GET(request: NextRequest) {
       id: auth.userId,
       email: auth.email,
       name: auth.name
-    },
-    memberships: auth.memberships
+    }
   });
 }

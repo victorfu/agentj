@@ -43,11 +43,8 @@ pnpm db:migrate
 pnpm db:seed
 ```
 
-Seed 預設 dev PAT：
-
-`agentj_pat_dev_local_token`
-
-可用 `AGENTJ_DEV_PAT_TOKEN`（`.env` 或 `apps/web/.env.local`）覆蓋預設值。
+`db:seed` 只會建立預設 dev user，不會預先建立 PAT。
+PAT 請從 Web Dashboard 產生。
 
 4. 分別啟動服務：
 
@@ -64,9 +61,21 @@ pnpm --filter @agentj/cli exec ./bin/run.js authtoken <從 Web 複製的 PAT>
 pnpm --filter @agentj/cli exec ./bin/run.js http 8080
 ```
 
-Web Dashboard (`http://localhost:3000`) 的 **Development PAT** 區塊可查看/產生 PAT。  
+Web Dashboard (`http://localhost:3000`) 的 **PATs** 區塊可查看/產生/撤銷 PAT。  
 `aj http` 會自動準備所需資源，不需要額外資源參數。
 本機直接跑 `web + gateway`（未經 Caddy）時，公開網址預設為 `http://<subdomain>.tunnel.localhost:4000`。
+
+## OpenAPI / Swagger 更新
+
+修改 `packages/contracts/src/api/openapi.json` 後，Swagger 不會直接讀 source 檔，而是讀 `@agentj/contracts` build 後的輸出。
+
+請在修改後執行：
+
+```sh
+pnpm --filter @agentj/contracts build
+```
+
+若 `apps/web` dev server 已在跑，重啟一次並重新整理 `/docs`（建議 hard refresh）。
 
 ## Tunnel 404 troubleshooting
 

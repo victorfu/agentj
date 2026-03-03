@@ -20,19 +20,41 @@
         }
       }
     },
-    "/api/v1/pats/dev": {
+    "/api/v1/pats": {
       "get": {
-        "summary": "Get default development PAT token",
+        "summary": "List personal access tokens (includes full token in MVP)",
         "responses": {
-          "200": { "description": "Development PAT token" },
-          "404": { "description": "Unavailable in production" }
+          "200": { "description": "List of active PATs including token value" }
         }
       },
       "post": {
-        "summary": "Generate development PAT token",
+        "summary": "Create a personal access token",
         "responses": {
-          "201": { "description": "Development PAT created" },
-          "404": { "description": "Unavailable in production" }
+          "201": { "description": "PAT created; full token returned once" }
+        }
+      }
+    },
+    "/api/v1/pats/{patId}": {
+      "delete": {
+        "summary": "Revoke a personal access token",
+        "parameters": [
+          { "name": "patId", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "204": { "description": "PAT revoked" },
+          "404": { "description": "PAT not found or already revoked" }
+        }
+      }
+    },
+    "/api/v1/pats/{patId}/tunnels": {
+      "get": {
+        "summary": "List tunnels belonging to a specific PAT",
+        "parameters": [
+          { "name": "patId", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "Tunnel list for the specified PAT" },
+          "404": { "description": "PAT not found" }
         }
       }
     },
