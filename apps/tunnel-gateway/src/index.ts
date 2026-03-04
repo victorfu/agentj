@@ -39,10 +39,16 @@ import {
 import { loadGatewayEnv } from './lib/env.js';
 import { toOutgoingHttpHeaders } from './lib/http-headers.js';
 import {
+  createAgentHeartbeatState,
+  markAgentPingAndShouldClose,
+  markAgentPong
+} from './lib/agent-heartbeat.js';
+import {
   buildTunnelHostContext,
   resolveTunnelSubdomain,
   unknownTunnelClosePayload
 } from './lib/tunnel-routing.js';
+import { WebSocketSendQueue } from './lib/ws-send.js';
 
 const env = loadGatewayEnv(process.env);
 
@@ -73,6 +79,7 @@ interface AgentConnection {
   agentInstanceId: string;
   sessionId: string;
   socket: WebSocket;
+  sendQueue: WebSocketSendQueue;
 }
 
 interface StreamState {
@@ -81,6 +88,7 @@ interface StreamState {
   requestId: string;
   reply?: FastifyReply;
   wsSocket?: WebSocket;
+  wsSendQueue?: WebSocketSendQueue;
   requestBytes: number;
   responseBytes: number;
   requestChunkIndex: number;
@@ -110,6 +118,17 @@ function runSafely(promise: Promise<unknown>, context: string): void {
   promise.catch((error: unknown) => {
     app.log.error({ context, error }, 'async task failed');
   });
+}
+
+function createSocketSendQueue(socket: WebSocket): WebSocketSendQueue {
+  return new WebSocketSendQueue(socket, {
+    highWatermarkBytes: env.AGENTJ_WS_SEND_HIGH_WATERMARK_BYTES,
+    timeoutMs: env.AGENTJ_STREAM_TIMEOUT_MS
+  });
+}
+
+async function sendToAgent(agent: AgentConnection, message: GatewayMessage): Promise<void> {
+  await agent.sendQueue.send(serializeGatewayMessage(message));
 }
 
 function armStreamTimeout(state: StreamState): void {
@@ -225,7 +244,12 @@ async function handleHttpIngress(request: FastifyRequest, reply: FastifyReply): 
     headers: normalizeHeaders(request.headers)
   };
 
-  agent.socket.send(serializeGatewayMessage(startMessage));
+  try {
+    await sendToAgent(agent, startMessage);
+  } catch (error) {
+    await failStream(streamId, 502, 'AGENT_SEND_FAILED', (error as Error).message);
+    return;
+  }
 
   for await (const chunk of request.raw) {
     armStreamTimeout(state);
@@ -239,7 +263,12 @@ async function handleHttpIngress(request: FastifyRequest, reply: FastifyReply): 
     };
 
     state.requestChunkIndex += 1;
-    agent.socket.send(serializeGatewayMessage(chunkMessage));
+    try {
+      await sendToAgent(agent, chunkMessage);
+    } catch (error) {
+      await failStream(streamId, 502, 'AGENT_SEND_FAILED', (error as Error).message);
+      return;
+    }
 
     await persistChunk(
       state,
@@ -255,7 +284,12 @@ async function handleHttpIngress(request: FastifyRequest, reply: FastifyReply): 
     type: 'ingress_request_end',
     streamId
   };
-  agent.socket.send(serializeGatewayMessage(endMessage));
+  try {
+    await sendToAgent(agent, endMessage);
+  } catch (error) {
+    await failStream(streamId, 502, 'AGENT_SEND_FAILED', (error as Error).message);
+    return;
+  }
 
   await new Promise<void>((resolve) => {
     reply.raw.once('close', () => resolve());
@@ -297,6 +331,17 @@ async function handleAgentConnection(socket: WebSocket, req: FastifyRequest): Pr
 
   const sessionId = `ses_${randomUUID()}`;
   let activeConnection: AgentConnection | null = null;
+  let agentHelloHandled = false;
+  const agentSendQueue = createSocketSendQueue(socket);
+  const heartbeatState = createAgentHeartbeatState(env.AGENTJ_AGENT_MAX_MISSED_PONGS);
+
+  const helloTimeout = setTimeout(() => {
+    if (!activeConnection) {
+      app.log.warn({ tunnelId: payload.tunnelId, sessionId }, 'agent hello timeout');
+      socket.close(4408, 'Agent hello timeout');
+    }
+  }, env.AGENTJ_AGENT_HELLO_TIMEOUT_MS);
+  helloTimeout.unref();
 
   socket.on('message', (raw) => {
     let message: GatewayMessage;
@@ -311,6 +356,12 @@ async function handleAgentConnection(socket: WebSocket, req: FastifyRequest): Pr
     runSafely(handleAgentMessage(activeConnection, message), `handle_agent_message:${message.type}`);
 
     if (message.type === 'agent_hello') {
+      if (agentHelloHandled) {
+        socket.close(4400, 'Duplicate agent hello');
+        return;
+      }
+      agentHelloHandled = true;
+
       runSafely(
         (async () => {
           const foundTunnel = await db.query.tunnels.findFirst({
@@ -336,10 +387,12 @@ async function handleAgentConnection(socket: WebSocket, req: FastifyRequest): Pr
             tunnelId: payload.tunnelId,
             agentInstanceId: message.agentInstanceId,
             sessionId,
-            socket
+            socket,
+            sendQueue: agentSendQueue
           };
 
           agentsByTunnel.set(payload.tunnelId, activeConnection);
+          clearTimeout(helloTimeout);
 
           runSafely(
             db.insert(tunnelSessions).values({
@@ -358,7 +411,7 @@ async function handleAgentConnection(socket: WebSocket, req: FastifyRequest): Pr
             `mark_tunnel_online:${payload.tunnelId}`
           );
 
-          socket.send(
+          await agentSendQueue.send(
             serializeGatewayMessage({
               type: 'agent_ready',
               tunnelId: payload.tunnelId
@@ -370,6 +423,7 @@ async function handleAgentConnection(socket: WebSocket, req: FastifyRequest): Pr
     }
 
     if (message.type === 'pong') {
+      markAgentPong(heartbeatState);
       runSafely(
         db
           .update(tunnelSessions)
@@ -381,20 +435,37 @@ async function handleAgentConnection(socket: WebSocket, req: FastifyRequest): Pr
   });
 
   const pingTimer = setInterval(() => {
+    if (!activeConnection) {
+      return;
+    }
+
+    if (markAgentPingAndShouldClose(heartbeatState)) {
+      app.log.warn(
+        { tunnelId: activeConnection.tunnelId, sessionId, missedPongs: heartbeatState.missedPongs },
+        'agent heartbeat timeout'
+      );
+      socket.close(4411, 'Heartbeat timeout');
+      return;
+    }
+
     try {
-      socket.send(
-        serializeGatewayMessage({
-          type: 'ping',
-          ts: Date.now()
-        })
+      runSafely(
+        agentSendQueue.send(
+          serializeGatewayMessage({
+            type: 'ping',
+            ts: Date.now()
+          })
+        ),
+        `send_ping:${sessionId}`
       );
     } catch (error) {
       app.log.warn({ error, sessionId }, 'failed to send websocket ping');
     }
-  }, 30000);
+  }, env.AGENTJ_AGENT_PING_INTERVAL_MS);
   pingTimer.unref();
 
   socket.on('close', () => {
+    clearTimeout(helloTimeout);
     clearInterval(pingTimer);
 
     if (activeConnection) {
@@ -444,12 +515,14 @@ async function handlePublicWebsocket(
 
   const streamId = `str_${randomUUID()}`;
   const requestId = `req_${randomUUID()}`;
+  const wsSendQueue = createSocketSendQueue(socket);
 
   const state: StreamState = {
     streamId,
     tunnelId: tunnel.id,
     requestId,
     wsSocket: socket,
+    wsSendQueue,
     requestBytes: 0,
     responseBytes: 0,
     requestChunkIndex: 0,
@@ -485,38 +558,59 @@ async function handlePublicWebsocket(
     headers: normalizeHeaders(request.headers)
   };
 
-  agent.socket.send(serializeGatewayMessage(startMessage));
+  try {
+    await sendToAgent(agent, startMessage);
+  } catch (error) {
+    await failStream(streamId, 502, 'AGENT_SEND_FAILED', (error as Error).message);
+    return;
+  }
 
   socket.on('message', (payload, isBinary) => {
-    armStreamTimeout(state);
-    const payloadBuffer = rawDataToBuffer(payload);
-    const chunkMessage: IngressRequestChunkMessage = {
-      type: 'ingress_request_chunk',
-      streamId,
-      chunkIndex: state.requestChunkIndex,
-      isBinary,
-      dataBase64: isBinary ? payloadBuffer.toString('base64') : undefined,
-      dataText: isBinary ? undefined : payloadBuffer.toString('utf8')
-    };
-
-    state.requestChunkIndex += 1;
-    agent.socket.send(serializeGatewayMessage(chunkMessage));
-
-    const data = isBinary ? payloadBuffer : Buffer.from(payloadBuffer.toString('utf8'), 'utf8');
     runSafely(
-      persistChunk(state, 'request', chunkMessage.chunkIndex, data, isBinary, null),
-      `persist_request_chunk:${streamId}:${chunkMessage.chunkIndex}`
+      (async () => {
+        armStreamTimeout(state);
+        const payloadBuffer = rawDataToBuffer(payload);
+        const chunkMessage: IngressRequestChunkMessage = {
+          type: 'ingress_request_chunk',
+          streamId,
+          chunkIndex: state.requestChunkIndex,
+          isBinary,
+          dataBase64: isBinary ? payloadBuffer.toString('base64') : undefined,
+          dataText: isBinary ? undefined : payloadBuffer.toString('utf8')
+        };
+
+        state.requestChunkIndex += 1;
+        try {
+          await sendToAgent(agent, chunkMessage);
+        } catch (error) {
+          await failStream(streamId, 502, 'AGENT_SEND_FAILED', (error as Error).message);
+          return;
+        }
+
+        const data = isBinary ? payloadBuffer : Buffer.from(payloadBuffer.toString('utf8'), 'utf8');
+        await persistChunk(state, 'request', chunkMessage.chunkIndex, data, isBinary, null);
+      })(),
+      `handle_public_ws_chunk:${streamId}:${state.requestChunkIndex}`
     );
   });
 
   socket.on('close', () => {
-    const endMessage: IngressRequestEndMessage = {
-      type: 'ingress_request_end',
-      streamId
-    };
+    runSafely(
+      (async () => {
+        const endMessage: IngressRequestEndMessage = {
+          type: 'ingress_request_end',
+          streamId
+        };
 
-    agent.socket.send(serializeGatewayMessage(endMessage));
-    runSafely(finalizeStream(streamId, null, null), `finalize_stream:${streamId}`);
+        try {
+          await sendToAgent(agent, endMessage);
+        } catch (error) {
+          app.log.warn({ error, streamId }, 'failed to forward websocket end to agent');
+        }
+        await finalizeStream(streamId, null, null);
+      })(),
+      `finalize_stream:${streamId}`
+    );
   });
 }
 
@@ -594,8 +688,13 @@ async function onAgentResponseChunk(message: AgentResponseChunkMessage): Promise
     state.reply.raw.write(data);
   }
 
-  if (state.protocol === 'ws' && state.wsSocket) {
-    state.wsSocket.send(data, { binary: message.isBinary });
+  if (state.protocol === 'ws' && state.wsSendQueue) {
+    try {
+      await state.wsSendQueue.send(data, { binary: message.isBinary });
+    } catch (error) {
+      await failStream(state.streamId, 502, 'UPSTREAM_STREAM_ERROR', (error as Error).message);
+      return;
+    }
   }
 
   await persistChunk(state, 'response', message.chunkIndex, data, message.isBinary, null);

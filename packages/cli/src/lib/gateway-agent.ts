@@ -17,6 +17,8 @@ import { parseGatewayMessage, serializeGatewayMessage } from '@agentj/contracts'
 import WebSocket from 'ws';
 import type { RawData } from 'ws';
 
+import { WebSocketSendQueue, type WebSocketBackpressureOptions } from './ws-send.js';
+
 interface AgentOptions {
   connectToken: string;
   tunnelId: string;
@@ -32,8 +34,12 @@ interface PendingHttpStream {
 
 interface PendingWsStream {
   socket: WebSocket;
+  sendQueue: WebSocketSendQueue;
   chunkIndex: number;
 }
+
+const DEFAULT_WS_SEND_HIGH_WATERMARK_BYTES = 1048576;
+const DEFAULT_WS_SEND_TIMEOUT_MS = 60000;
 
 export interface GatewayCloseAction {
   shouldExitNonZero: boolean;
@@ -61,23 +67,62 @@ export function mapGatewayCloseAction(code: number): GatewayCloseAction | null {
     };
   }
 
+  if (code === 4408) {
+    return {
+      shouldExitNonZero: true,
+      message: 'Gateway closed connection (4408): agent hello timeout before registration completed.'
+    };
+  }
+
+  if (code === 4411) {
+    return {
+      shouldExitNonZero: true,
+      message: 'Gateway closed connection (4411): heartbeat timeout due to missed pongs.'
+    };
+  }
+
   return null;
+}
+
+function resolveWsBackpressureOptions(env: NodeJS.ProcessEnv = process.env): WebSocketBackpressureOptions {
+  return {
+    highWatermarkBytes: readPositiveInt(
+      env.AGENTJ_WS_SEND_HIGH_WATERMARK_BYTES,
+      DEFAULT_WS_SEND_HIGH_WATERMARK_BYTES
+    ),
+    timeoutMs: readPositiveInt(env.AGENTJ_STREAM_TIMEOUT_MS, DEFAULT_WS_SEND_TIMEOUT_MS)
+  };
+}
+
+function readPositiveInt(value: string | undefined, defaultValue: number): number {
+  if (!value) {
+    return defaultValue;
+  }
+
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return defaultValue;
+  }
+
+  return Math.floor(parsed);
 }
 
 export async function runAgent(options: AgentOptions): Promise<void> {
   const pendingHttp = new Map<string, PendingHttpStream>();
   const pendingWs = new Map<string, PendingWsStream>();
   const agentInstanceId = `agent_${crypto.randomUUID()}`;
+  const wsBackpressureOptions = resolveWsBackpressureOptions(process.env);
 
   const ws = new WebSocket(options.gatewayWebsocketUrl, {
     headers: {
       authorization: `Bearer ${options.connectToken}`
     }
   });
+  const gatewaySendQueue = new WebSocketSendQueue(ws, wsBackpressureOptions);
 
   await onceOpen(ws);
 
-  ws.send(
+  await gatewaySendQueue.send(
     serializeGatewayMessage({
       type: 'agent_hello',
       tunnelId: options.tunnelId,
@@ -130,7 +175,7 @@ export async function runAgent(options: AgentOptions): Promise<void> {
       case 'ping': {
         const ping = message as PingMessage;
         const pong: PongMessage = { type: 'pong', ts: ping.ts };
-        ws.send(serializeGatewayMessage(pong));
+        await gatewaySendQueue.send(serializeGatewayMessage(pong));
         return;
       }
       case 'ingress_request_start': {
@@ -143,10 +188,17 @@ export async function runAgent(options: AgentOptions): Promise<void> {
               streamId: message.streamId,
               message: (error as Error).message
             };
-            ws.send(serializeGatewayMessage(streamError));
+            await gatewaySendQueue.send(serializeGatewayMessage(streamError));
           }
         } else {
-          startHttpExchange(ws, message, options.targetHost, options.targetPort, pendingHttp);
+          startHttpExchange(
+            ws,
+            gatewaySendQueue,
+            message,
+            options.targetHost,
+            options.targetPort,
+            pendingHttp
+          );
         }
         return;
       }
@@ -154,9 +206,9 @@ export async function runAgent(options: AgentOptions): Promise<void> {
         const wsStream = pendingWs.get(message.streamId);
         if (wsStream) {
           if (message.isBinary && message.dataBase64) {
-            wsStream.socket.send(Buffer.from(message.dataBase64, 'base64'));
+            await wsStream.sendQueue.send(Buffer.from(message.dataBase64, 'base64'), { binary: true });
           } else {
-            wsStream.socket.send(message.dataText ?? '');
+            await wsStream.sendQueue.send(message.dataText ?? '');
           }
           return;
         }
@@ -200,6 +252,7 @@ export async function runAgent(options: AgentOptions): Promise<void> {
     const localSocket = new WebSocket(localUrl, {
       headers: buildForwardRequestHeaders(message.headers)
     });
+    const localSendQueue = new WebSocketSendQueue(localSocket, wsBackpressureOptions);
 
     await onceOpen(localSocket);
 
@@ -209,9 +262,9 @@ export async function runAgent(options: AgentOptions): Promise<void> {
       statusCode: 101,
       headers: {}
     };
-    ws.send(serializeGatewayMessage(responseStart));
+    await gatewaySendQueue.send(serializeGatewayMessage(responseStart));
 
-    pendingWs.set(message.streamId, { socket: localSocket, chunkIndex: 0 });
+    pendingWs.set(message.streamId, { socket: localSocket, sendQueue: localSendQueue, chunkIndex: 0 });
 
     localSocket.on('message', (payload, isBinary) => {
       const stream = pendingWs.get(message.streamId);
@@ -235,7 +288,10 @@ export async function runAgent(options: AgentOptions): Promise<void> {
         responseChunk.dataText = payloadBuffer.toString('utf8');
       }
 
-      ws.send(serializeGatewayMessage(responseChunk));
+      void gatewaySendQueue.send(serializeGatewayMessage(responseChunk)).catch((error: unknown) => {
+        console.error('failed to send websocket response chunk to gateway', error);
+        ws.close(1011, 'Failed to send websocket response chunk');
+      });
     });
 
     localSocket.on('close', () => {
@@ -243,7 +299,10 @@ export async function runAgent(options: AgentOptions): Promise<void> {
         type: 'agent_response_end',
         streamId: message.streamId
       };
-      ws.send(serializeGatewayMessage(end));
+      void gatewaySendQueue.send(serializeGatewayMessage(end)).catch((error: unknown) => {
+        console.error('failed to send websocket response end to gateway', error);
+        ws.close(1011, 'Failed to send websocket response end');
+      });
       pendingWs.delete(message.streamId);
     });
 
@@ -253,7 +312,10 @@ export async function runAgent(options: AgentOptions): Promise<void> {
         streamId: message.streamId,
         message: error.message
       };
-      ws.send(serializeGatewayMessage(streamError));
+      void gatewaySendQueue.send(serializeGatewayMessage(streamError)).catch((sendError: unknown) => {
+        console.error('failed to send websocket stream error to gateway', sendError);
+        ws.close(1011, 'Failed to send websocket stream error');
+      });
       pendingWs.delete(message.streamId);
     });
   }
@@ -266,6 +328,7 @@ export async function runAgent(options: AgentOptions): Promise<void> {
 
 function startHttpExchange(
   gatewaySocket: WebSocket,
+  gatewaySendQueue: WebSocketSendQueue,
   start: IngressRequestStartMessage,
   targetHost: string,
   targetPort: number,
@@ -304,7 +367,10 @@ function startHttpExchange(
         statusCode,
         headers: toHeaderRecord(res.headers)
       };
-      gatewaySocket.send(serializeGatewayMessage(startMessage));
+      void gatewaySendQueue.send(serializeGatewayMessage(startMessage)).catch((error: unknown) => {
+        console.error('failed to send http response start to gateway', error);
+        gatewaySocket.close(1011, 'Failed to send http response start');
+      });
 
       let chunkIndex = 0;
 
@@ -317,7 +383,10 @@ function startHttpExchange(
           dataBase64: chunk.toString('base64')
         };
         chunkIndex += 1;
-        gatewaySocket.send(serializeGatewayMessage(chunkMessage));
+        void gatewaySendQueue.send(serializeGatewayMessage(chunkMessage)).catch((error: unknown) => {
+          console.error('failed to send http response chunk to gateway', error);
+          gatewaySocket.close(1011, 'Failed to send http response chunk');
+        });
       });
 
       res.on('end', () => {
@@ -327,7 +396,10 @@ function startHttpExchange(
           type: 'agent_response_end',
           streamId: start.streamId
         };
-        gatewaySocket.send(serializeGatewayMessage(endMessage));
+        void gatewaySendQueue.send(serializeGatewayMessage(endMessage)).catch((error: unknown) => {
+          console.error('failed to send http response end to gateway', error);
+          gatewaySocket.close(1011, 'Failed to send http response end');
+        });
         pendingHttp.delete(start.streamId);
       });
     }
@@ -341,7 +413,10 @@ function startHttpExchange(
       streamId: start.streamId,
       message: error.message
     };
-    gatewaySocket.send(serializeGatewayMessage(streamError));
+    void gatewaySendQueue.send(serializeGatewayMessage(streamError)).catch((sendError: unknown) => {
+      console.error('failed to send http stream error to gateway', sendError);
+      gatewaySocket.close(1011, 'Failed to send http stream error');
+    });
     pendingHttp.delete(start.streamId);
   });
 
@@ -375,14 +450,14 @@ export function buildForwardRequestHeaders(
   const host = forwarded.host?.trim();
 
   delete forwarded.host;
+  delete forwarded['x-forwarded-host'];
+  delete forwarded['x-forwarded-port'];
 
   if (host) {
-    if (!forwarded['x-forwarded-host']) {
-      forwarded['x-forwarded-host'] = host;
-    }
+    forwarded['x-forwarded-host'] = host;
 
     const port = parsePortFromHostHeader(host);
-    if (port && !forwarded['x-forwarded-port']) {
+    if (port) {
       forwarded['x-forwarded-port'] = port;
     }
   }

@@ -27,6 +27,12 @@ describe('tunnel host resolution', () => {
     expect(resolveTunnelSubdomain(parsedHost, 'tunnel.localhost')).toBe('abc123');
   });
 
+  it('accepts uppercase host/domain by normalizing to lowercase', () => {
+    const parsedHost = parseHostHeader('ABC123.TUNNEL.LOCALHOST:4000');
+    expect(parsedHost).toBe('abc123.tunnel.localhost');
+    expect(resolveTunnelSubdomain(parsedHost, 'TUNNEL.LOCALHOST')).toBe('abc123');
+  });
+
   it('returns null for invalid host/domain', () => {
     const parsedHost = parseHostHeader('localhost:4000');
     expect(resolveTunnelSubdomain(parsedHost, 'tunnel.localhost')).toBeNull();

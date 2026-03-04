@@ -14,19 +14,46 @@ export const TUNNEL_NOT_FOUND_CLOSE_REASON = 'Tunnel ID not found in gateway DB'
 
 export function parseHostHeader(hostHeader: string | string[] | undefined): string {
   const raw = Array.isArray(hostHeader) ? hostHeader[0] : hostHeader;
-  return (raw ?? '').split(':')[0] ?? '';
+  const normalized = (raw ?? '').trim().toLowerCase();
+
+  if (!normalized) {
+    return '';
+  }
+
+  if (normalized.startsWith('[')) {
+    const closingBracket = normalized.indexOf(']');
+    if (closingBracket === -1) {
+      return normalized;
+    }
+
+    return normalized.slice(0, closingBracket + 1);
+  }
+
+  const firstColon = normalized.indexOf(':');
+  if (firstColon === -1) {
+    return normalized;
+  }
+
+  const lastColon = normalized.lastIndexOf(':');
+  if (firstColon !== lastColon) {
+    return normalized;
+  }
+
+  return normalized.slice(0, firstColon);
 }
 
 export function resolveTunnelSubdomain(
   parsedHost: string,
   baseDomain: string
 ): string | null {
-  const suffix = `.${baseDomain}`;
-  if (!parsedHost.endsWith(suffix)) {
+  const normalizedHost = parsedHost.trim().toLowerCase();
+  const normalizedBaseDomain = baseDomain.trim().toLowerCase();
+  const suffix = `.${normalizedBaseDomain}`;
+  if (!normalizedHost.endsWith(suffix)) {
     return null;
   }
 
-  const subdomain = parsedHost.slice(0, -suffix.length);
+  const subdomain = normalizedHost.slice(0, -suffix.length);
   if (!subdomain) {
     return null;
   }
@@ -39,11 +66,12 @@ export function buildTunnelHostContext(
   baseDomain: string
 ): TunnelHostContext {
   const raw = Array.isArray(hostHeader) ? hostHeader[0] : hostHeader;
+  const normalizedBaseDomain = baseDomain.trim().toLowerCase();
   return {
     hostHeader: raw ?? '',
     parsedHost: parseHostHeader(hostHeader),
-    expectedBaseDomain: baseDomain,
-    expectedSuffix: `.${baseDomain}`
+    expectedBaseDomain: normalizedBaseDomain,
+    expectedSuffix: `.${normalizedBaseDomain}`
   };
 }
 

@@ -20,6 +20,20 @@ describe('mapGatewayCloseAction', () => {
     expect(action?.message).toContain('Tunnel offline');
   });
 
+  it('maps 4408 to hello timeout diagnostic', () => {
+    const action = mapGatewayCloseAction(4408);
+    expect(action).toBeTruthy();
+    expect(action?.shouldExitNonZero).toBe(true);
+    expect(action?.message).toContain('hello timeout');
+  });
+
+  it('maps 4411 to heartbeat timeout diagnostic', () => {
+    const action = mapGatewayCloseAction(4411);
+    expect(action).toBeTruthy();
+    expect(action?.shouldExitNonZero).toBe(true);
+    expect(action?.message).toContain('heartbeat timeout');
+  });
+
   it('returns null for unknown close code', () => {
     expect(mapGatewayCloseAction(1000)).toBeNull();
     expect(mapGatewayCloseAction(4999)).toBeNull();
@@ -38,15 +52,15 @@ describe('buildForwardRequestHeaders', () => {
     expect(headers['x-forwarded-port']).toBe('4000');
   });
 
-  it('keeps existing x-forwarded headers untouched', () => {
+  it('overwrites existing x-forwarded headers with parsed host values', () => {
     const headers = buildForwardRequestHeaders({
       host: 'abc123.tunnel.localhost:4000',
       'x-forwarded-host': 'proxy.example.com',
       'x-forwarded-port': '443'
     });
 
-    expect(headers['x-forwarded-host']).toBe('proxy.example.com');
-    expect(headers['x-forwarded-port']).toBe('443');
+    expect(headers['x-forwarded-host']).toBe('abc123.tunnel.localhost:4000');
+    expect(headers['x-forwarded-port']).toBe('4000');
   });
 
   it('supports ipv6 host header with port', () => {

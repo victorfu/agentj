@@ -9,7 +9,11 @@ export const gatewayEnvSchema = z.object({
   AGENTJ_CONNECT_TOKEN_SECRET: z.string().min(16),
   PORT: z.coerce.number().default(4000),
   AGENTJ_REQUEST_BODY_LIMIT_BYTES: z.coerce.number().default(262144),
-  AGENTJ_STREAM_TIMEOUT_MS: z.coerce.number().int().positive().default(60000)
+  AGENTJ_STREAM_TIMEOUT_MS: z.coerce.number().int().positive().default(60000),
+  AGENTJ_AGENT_HELLO_TIMEOUT_MS: z.coerce.number().int().positive().default(10000),
+  AGENTJ_AGENT_PING_INTERVAL_MS: z.coerce.number().int().positive().default(30000),
+  AGENTJ_AGENT_MAX_MISSED_PONGS: z.coerce.number().int().nonnegative().default(2),
+  AGENTJ_WS_SEND_HIGH_WATERMARK_BYTES: z.coerce.number().int().positive().default(1048576)
 });
 
 export type GatewayEnv = z.infer<typeof gatewayEnvSchema>;

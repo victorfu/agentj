@@ -90,6 +90,13 @@ pnpm --filter @agentj/cli exec ./bin/run.js logs <tunnelId> --follow
   - 檢查 `web` 與 `gateway` 是否連到同一個 `DATABASE_URL`
   - 檢查 `AGENTJ_TUNNEL_BASE_DOMAIN` 是否一致（都應為 `tunnel.localhost`）
   - 檢查 `AGENTJ_CONNECT_TOKEN_SECRET` 與 `AGENTJ_GATEWAY_WS_PUBLIC_URL` 是否一致
+- Agent 連線被關閉 `4408`（hello timeout）：
+  - 檢查 agent 是否有在連線後立即送出 `agent_hello`
+  - 需要時可調整 `AGENTJ_AGENT_HELLO_TIMEOUT_MS`（預設 `10000`）
+- Agent 連線被關閉 `4411`（heartbeat timeout）：
+  - 檢查網路品質與是否有封包丟失導致 `pong` 回覆中斷
+  - 可調整 `AGENTJ_AGENT_PING_INTERVAL_MS`、`AGENTJ_AGENT_MAX_MISSED_PONGS`
+  - 高負載時可調整 `AGENTJ_WS_SEND_HIGH_WATERMARK_BYTES`
 - Tunnel logs 顯示請求狀態 `404`：
   - 代表請求已到上游 app，404 來自 `:8080` 的路由本身（不是 tunnel domain 問題）
 
