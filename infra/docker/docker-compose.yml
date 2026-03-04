@@ -16,7 +16,7 @@ services:
       - postgres_data:/var/lib/postgresql/data
 
   web:
-    image: node:24-alpine
+    image: node:22-alpine
     working_dir: /workspace
     command: >
       sh -lc "corepack enable && pnpm install &&
@@ -40,7 +40,7 @@ services:
       - pnpm_store:/root/.local/share/pnpm/store
 
   gateway:
-    image: node:24-alpine
+    image: node:22-alpine
     working_dir: /workspace
     command: >
       sh -lc "corepack enable && pnpm install &&

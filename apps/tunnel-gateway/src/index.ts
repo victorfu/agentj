@@ -332,6 +332,7 @@ async function handleAgentConnection(socket: WebSocket, req: FastifyRequest): Pr
   const sessionId = `ses_${randomUUID()}`;
   let activeConnection: AgentConnection | null = null;
   let agentHelloHandled = false;
+  let pingSendInFlight = false;
   const agentSendQueue = createSocketSendQueue(socket);
   const heartbeatState = createAgentHeartbeatState(env.AGENTJ_AGENT_MAX_MISSED_PONGS);
 
@@ -361,6 +362,7 @@ async function handleAgentConnection(socket: WebSocket, req: FastifyRequest): Pr
         return;
       }
       agentHelloHandled = true;
+      clearTimeout(helloTimeout);
 
       runSafely(
         (async () => {
@@ -378,6 +380,15 @@ async function handleAgentConnection(socket: WebSocket, req: FastifyRequest): Pr
             return;
           }
 
+          // Avoid registering an offline socket as an active tunnel agent.
+          if (socket.readyState !== 1) {
+            app.log.warn(
+              { tunnelId: payload.tunnelId, sessionId },
+              'agent socket closed before registration completed'
+            );
+            return;
+          }
+
           const existing = agentsByTunnel.get(payload.tunnelId);
           if (existing && existing.sessionId !== sessionId) {
             existing.socket.close(4001, 'Superseded by newer agent session');
@@ -392,7 +403,6 @@ async function handleAgentConnection(socket: WebSocket, req: FastifyRequest): Pr
           };
 
           agentsByTunnel.set(payload.tunnelId, activeConnection);
-          clearTimeout(helloTimeout);
 
           runSafely(
             db.insert(tunnelSessions).values({
@@ -439,28 +449,42 @@ async function handleAgentConnection(socket: WebSocket, req: FastifyRequest): Pr
       return;
     }
 
-    if (markAgentPingAndShouldClose(heartbeatState)) {
-      app.log.warn(
-        { tunnelId: activeConnection.tunnelId, sessionId, missedPongs: heartbeatState.missedPongs },
-        'agent heartbeat timeout'
-      );
-      socket.close(4411, 'Heartbeat timeout');
+    if (pingSendInFlight) {
       return;
     }
 
-    try {
-      runSafely(
-        agentSendQueue.send(
-          serializeGatewayMessage({
-            type: 'ping',
-            ts: Date.now()
-          })
-        ),
-        `send_ping:${sessionId}`
-      );
-    } catch (error) {
-      app.log.warn({ error, sessionId }, 'failed to send websocket ping');
-    }
+    pingSendInFlight = true;
+
+    runSafely(
+      (async () => {
+        try {
+          await agentSendQueue.send(
+            serializeGatewayMessage({
+              type: 'ping',
+              ts: Date.now()
+            })
+          );
+        } catch (error) {
+          app.log.warn({ error, sessionId }, 'failed to send websocket ping');
+          return;
+        } finally {
+          pingSendInFlight = false;
+        }
+
+        if (!activeConnection) {
+          return;
+        }
+
+        if (markAgentPingAndShouldClose(heartbeatState)) {
+          app.log.warn(
+            { tunnelId: activeConnection.tunnelId, sessionId, missedPongs: heartbeatState.missedPongs },
+            'agent heartbeat timeout'
+          );
+          socket.close(4411, 'Heartbeat timeout');
+        }
+      })(),
+      `send_ping:${sessionId}`
+    );
   }, env.AGENTJ_AGENT_PING_INTERVAL_MS);
   pingTimer.unref();
 
