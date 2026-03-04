@@ -61,6 +61,7 @@ describe('mapGatewayCloseAction', () => {
 
 describe('retry policy', () => {
   it('marks known fatal close codes as non-retryable', () => {
+    expect(isRetryableGatewayCloseCode(4001)).toBe(false);
     expect(isRetryableGatewayCloseCode(4400)).toBe(false);
     expect(isRetryableGatewayCloseCode(4401)).toBe(false);
     expect(isRetryableGatewayCloseCode(4404)).toBe(false);

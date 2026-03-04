@@ -62,13 +62,25 @@ export default class TunnelHttp extends Command {
         continue;
       }
 
-      const result = await runAgent({
-        connectToken,
-        tunnelId: tunnel.id,
-        gatewayWebsocketUrl,
-        targetHost: target.host,
-        targetPort: target.port
-      });
+      let result: Awaited<ReturnType<typeof runAgent>>;
+      try {
+        result = await runAgent({
+          connectToken,
+          tunnelId: tunnel.id,
+          gatewayWebsocketUrl,
+          targetHost: target.host,
+          targetPort: target.port
+        });
+      } catch (error) {
+        retryAttempt += 1;
+        const delayMs = computeReconnectDelayMs(retryAttempt);
+        this.warn(
+          `Gateway connection setup failed (attempt ${retryAttempt}): ${(error as Error).message}. ` +
+            `Retrying in ${delayMs}ms...`
+        );
+        await sleep(delayMs);
+        continue;
+      }
 
       const closeAction = result.closeCode === null ? null : mapGatewayCloseAction(result.closeCode);
       if (closeAction) {

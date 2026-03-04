@@ -3,34 +3,16 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { toast } from 'sonner';
-import {
-  Check,
-  CircleAlert,
-  Copy,
-  ExternalLink,
-  Globe,
-  KeyRound,
-  Loader2,
-} from 'lucide-react';
+import { Check, CircleAlert, Copy, ExternalLink, Globe, KeyRound, Loader2 } from 'lucide-react';
 
 import { ThemeToggle } from '@/components/theme-toggle';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface PatToken {
   id: string;
@@ -103,7 +85,7 @@ export function Dashboard() {
     setCreatingPat(true);
     try {
       const response = await fetch('/api/v1/pats', {
-        method: 'POST',
+        method: 'POST'
       });
       if (!response.ok) throw new Error(await response.text());
 
@@ -117,8 +99,8 @@ export function Dashboard() {
           token: created.token,
           scopes: ['tunnels:write', 'requests:read'],
           createdAt: created.createdAt,
-          expiresAt: null,
-        },
+          expiresAt: null
+        }
       ]);
       toast.success('PAT created');
     } catch (err) {
@@ -132,7 +114,7 @@ export function Dashboard() {
     setRevokingPatId(patId);
     try {
       const response = await fetch(`/api/v1/pats/${patId}`, {
-        method: 'DELETE',
+        method: 'DELETE'
       });
       if (!response.ok) throw new Error(await response.text());
       setPats((prev) => prev.filter((p) => p.id !== patId));
@@ -149,18 +131,7 @@ export function Dashboard() {
       {/* Header */}
       <header className="flex items-center justify-between py-5">
         <div className="flex items-center gap-3">
-          <svg
-            width="36"
-            height="36"
-            viewBox="0 0 512 512"
-            role="img"
-            aria-label="Agentj"
-            className="shrink-0"
-          >
-            <rect width="512" height="512" rx="108" className="fill-primary" />
-            <path d="M136 408 V208 A120 120 0 0 1 376 208 V408 Z" fill="#080c16" />
-            <path d="M188 408 V208 A68 68 0 0 1 324 208 V408 Z" className="fill-primary" />
-          </svg>
+          <img src="/logo.svg" alt="Agentj" className="h-10 w-10" />
           <div>
             <h1 className="text-xl font-bold leading-tight sm:text-2xl">Agentj</h1>
             <p className="text-xs text-muted-foreground sm:text-sm">Control Plane</p>
@@ -195,29 +166,21 @@ export function Dashboard() {
             <KeyRound className="size-5 text-primary" />
             PATs
           </CardTitle>
-          <CardDescription>
-            Manage your Personal Access Tokens.
-          </CardDescription>
+          <CardDescription>Manage your Personal Access Tokens.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           {newlyCreatedToken && (
             <Alert>
               <CircleAlert className="size-4" />
               <AlertDescription className="space-y-2">
-                <p className="font-medium">
-                  New PAT created.
-                </p>
+                <p className="font-medium">New PAT created.</p>
                 <div className="flex items-center gap-2 rounded-lg border bg-agentj-code p-3">
                   <pre className="flex-1 overflow-x-auto font-mono text-sm leading-relaxed">
                     {newlyCreatedToken}
                   </pre>
                   <CopyButton text={newlyCreatedToken} />
                 </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setNewlyCreatedToken(null)}
-                >
+                <Button variant="ghost" size="sm" onClick={() => setNewlyCreatedToken(null)}>
                   Dismiss
                 </Button>
               </AlertDescription>
@@ -231,7 +194,9 @@ export function Dashboard() {
               ))}
             </div>
           ) : pats.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No active PATs yet. Create one to start.</p>
+            <p className="text-sm text-muted-foreground">
+              No active PATs yet. Create one to start.
+            </p>
           ) : (
             <div className="space-y-2">
               {pats.map((pat) => (
@@ -256,11 +221,7 @@ export function Dashboard() {
                         onClick={() => void revokePat(pat.id)}
                         disabled={revokingPatId === pat.id}
                       >
-                        {revokingPatId === pat.id ? (
-                          <Loader2 className="animate-spin" />
-                        ) : (
-                          'Revoke'
-                        )}
+                        {revokingPatId === pat.id ? <Loader2 className="animate-spin" /> : 'Revoke'}
                       </Button>
                     </div>
                   </div>
@@ -269,10 +230,7 @@ export function Dashboard() {
             </div>
           )}
 
-          <Button
-            onClick={() => void createPat()}
-            disabled={creatingPat}
-          >
+          <Button onClick={() => void createPat()} disabled={creatingPat}>
             {creatingPat ? (
               <>
                 <Loader2 className="animate-spin" />
