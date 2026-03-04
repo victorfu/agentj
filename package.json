@@ -8,6 +8,11 @@
   "scripts": {
     "build": "turbo run build",
     "dev": "turbo run dev --parallel",
+    "dev:app": "pnpm --filter @agentj/web --filter @agentj/tunnel-gateway --parallel dev",
+    "dev:web": "pnpm --filter @agentj/web dev",
+    "dev:gateway": "pnpm --filter @agentj/tunnel-gateway dev",
+    "build:cli": "pnpm --filter @agentj/cli build",
+    "cli": "pnpm --filter @agentj/cli exec ./bin/run.js",
     "test": "turbo run test",
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",

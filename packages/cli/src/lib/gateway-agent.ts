@@ -198,7 +198,7 @@ export async function runAgent(options: AgentOptions): Promise<void> {
     }`;
 
     const localSocket = new WebSocket(localUrl, {
-      headers: flattenHeaders(message.headers)
+      headers: buildForwardRequestHeaders(message.headers)
     });
 
     await onceOpen(localSocket);
@@ -286,8 +286,7 @@ function startHttpExchange(
   const localUrl = new URL(`${localProtocol}://${targetHost}:${targetPort}${start.path}`);
   localUrl.search = start.query;
 
-  const requestHeaders = flattenHeaders(start.headers);
-  delete requestHeaders.host;
+  const requestHeaders = buildForwardRequestHeaders(start.headers);
 
   const requestFn = localUrl.protocol === 'https:' ? httpsRequest : httpRequest;
 
@@ -367,6 +366,57 @@ function rawDataToBuffer(payload: RawData): Buffer {
 function flattenHeaders(headers: Record<string, string | string[]>): Record<string, string> {
   const entries = Object.entries(headers).map(([key, value]) => [key, Array.isArray(value) ? value.join(',') : value]);
   return Object.fromEntries(entries);
+}
+
+export function buildForwardRequestHeaders(
+  headers: Record<string, string | string[]>
+): Record<string, string> {
+  const forwarded = flattenHeaders(headers);
+  const host = forwarded.host?.trim();
+
+  delete forwarded.host;
+
+  if (host) {
+    if (!forwarded['x-forwarded-host']) {
+      forwarded['x-forwarded-host'] = host;
+    }
+
+    const port = parsePortFromHostHeader(host);
+    if (port && !forwarded['x-forwarded-port']) {
+      forwarded['x-forwarded-port'] = port;
+    }
+  }
+
+  return forwarded;
+}
+
+function parsePortFromHostHeader(hostHeader: string): string | null {
+  if (!hostHeader) {
+    return null;
+  }
+
+  if (hostHeader.startsWith('[')) {
+    const closingBracket = hostHeader.indexOf(']');
+    if (closingBracket === -1) {
+      return null;
+    }
+
+    const rest = hostHeader.slice(closingBracket + 1);
+    if (!rest.startsWith(':')) {
+      return null;
+    }
+
+    const port = rest.slice(1);
+    return /^\d+$/.test(port) ? port : null;
+  }
+
+  const segments = hostHeader.split(':');
+  if (segments.length !== 2) {
+    return null;
+  }
+
+  const port = segments[1] ?? '';
+  return /^\d+$/.test(port) ? port : null;
 }
 
 function toHeaderRecord(headers: Record<string, string | string[] | undefined>): Record<string, string | string[]> {

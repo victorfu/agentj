@@ -53,6 +53,12 @@ const app = Fastify({
 
 await app.register(websocketPlugin);
 
+// Disable default body parsing so request.raw stays unconsumed for proxy streaming.
+app.removeAllContentTypeParsers();
+app.addContentTypeParser('*', function (_request, _payload, done) {
+  done(null);
+});
+
 const pool = createPool(env.DATABASE_URL);
 const db = createDb(pool);
 
