@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildForwardRequestHeaders, mapGatewayCloseAction } from './gateway-agent.js';
+import {
+  buildForwardRequestHeaders,
+  computeReconnectDelayMs,
+  isRetryableGatewayCloseCode,
+  mapGatewayCloseAction
+} from './gateway-agent.js';
 
 describe('mapGatewayCloseAction', () => {
   it('maps 4404 to mismatch diagnostic', () => {
@@ -37,6 +42,53 @@ describe('mapGatewayCloseAction', () => {
   it('returns null for unknown close code', () => {
     expect(mapGatewayCloseAction(1000)).toBeNull();
     expect(mapGatewayCloseAction(4999)).toBeNull();
+  });
+
+  it('maps 4401 to auth diagnostic', () => {
+    const action = mapGatewayCloseAction(4401);
+    expect(action).toBeTruthy();
+    expect(action?.shouldExitNonZero).toBe(true);
+    expect(action?.message).toContain('invalid or expired connect token');
+  });
+
+  it('maps 4400 to malformed-message diagnostic', () => {
+    const action = mapGatewayCloseAction(4400);
+    expect(action).toBeTruthy();
+    expect(action?.shouldExitNonZero).toBe(true);
+    expect(action?.message).toContain('malformed websocket message');
+  });
+});
+
+describe('retry policy', () => {
+  it('marks known fatal close codes as non-retryable', () => {
+    expect(isRetryableGatewayCloseCode(4400)).toBe(false);
+    expect(isRetryableGatewayCloseCode(4401)).toBe(false);
+    expect(isRetryableGatewayCloseCode(4404)).toBe(false);
+    expect(isRetryableGatewayCloseCode(1000)).toBe(false);
+  });
+
+  it('marks transient close codes as retryable', () => {
+    expect(isRetryableGatewayCloseCode(4408)).toBe(true);
+    expect(isRetryableGatewayCloseCode(4410)).toBe(true);
+    expect(isRetryableGatewayCloseCode(4411)).toBe(true);
+    expect(isRetryableGatewayCloseCode(4429)).toBe(true);
+    expect(isRetryableGatewayCloseCode(1011)).toBe(true);
+  });
+});
+
+describe('reconnect backoff', () => {
+  it('uses exponential delay with jitter and max cap', () => {
+    expect(computeReconnectDelayMs(1, 0.5)).toBe(1000);
+    expect(computeReconnectDelayMs(2, 0.5)).toBe(2000);
+    expect(computeReconnectDelayMs(3, 0.5)).toBe(4000);
+    expect(computeReconnectDelayMs(99, 0.5)).toBe(15000);
+  });
+
+  it('applies bounded jitter', () => {
+    expect(computeReconnectDelayMs(1, 0)).toBe(800);
+    expect(computeReconnectDelayMs(1, 1)).toBe(1200);
+    expect(computeReconnectDelayMs(5, 0)).toBe(12000);
+    expect(computeReconnectDelayMs(5, 1)).toBe(15000);
   });
 });
 

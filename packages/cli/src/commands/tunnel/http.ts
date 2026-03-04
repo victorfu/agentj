@@ -1,10 +1,12 @@
 import { Args, Command, Flags } from '@oclif/core';
 
 import { loadApiClient } from '../../lib/client.js';
-import { runAgent } from '../../lib/gateway-agent.js';
+import { computeReconnectDelayMs, mapGatewayCloseAction, runAgent } from '../../lib/gateway-agent.js';
 import { resolveLocalHttpTarget } from '../../lib/http-target.js';
 import { ensureLoggedIn } from '../../lib/project.js';
 import { resolveCliConfig } from '../../lib/config.js';
+
+const STABLE_CONNECTION_RESET_MS = 30000;
 
 export default class TunnelHttp extends Command {
   static description = 'Expose a local HTTP server through Agentj tunnel';
@@ -36,17 +38,69 @@ export default class TunnelHttp extends Command {
       targetPort: target.port
     });
 
-    const connect = await client.createConnectToken(tunnel.id);
-
     this.log(`Tunnel: ${tunnel.id}`);
     this.log(`Forwarding: ${tunnel.publicUrl} -> http://${target.host}:${target.port}`);
 
-    await runAgent({
-      connectToken: connect.connectToken,
-      tunnelId: tunnel.id,
-      gatewayWebsocketUrl: connect.gatewayWebsocketUrl || config.gatewayUrl,
-      targetHost: target.host,
-      targetPort: target.port
-    });
+    let retryAttempt = 0;
+
+    while (true) {
+      let connectToken: string;
+      let gatewayWebsocketUrl: string;
+
+      try {
+        const connect = await client.createConnectToken(tunnel.id);
+        connectToken = connect.connectToken;
+        gatewayWebsocketUrl = connect.gatewayWebsocketUrl || config.gatewayUrl;
+      } catch (error) {
+        retryAttempt += 1;
+        const delayMs = computeReconnectDelayMs(retryAttempt);
+        this.warn(
+          `Failed to fetch connect token (attempt ${retryAttempt}): ${(error as Error).message}. ` +
+            `Retrying in ${delayMs}ms...`
+        );
+        await sleep(delayMs);
+        continue;
+      }
+
+      const result = await runAgent({
+        connectToken,
+        tunnelId: tunnel.id,
+        gatewayWebsocketUrl,
+        targetHost: target.host,
+        targetPort: target.port
+      });
+
+      const closeAction = result.closeCode === null ? null : mapGatewayCloseAction(result.closeCode);
+      if (closeAction) {
+        this.warn(closeAction.message);
+      }
+
+      if (!result.retryable) {
+        if (closeAction?.shouldExitNonZero) {
+          process.exitCode = 1;
+        }
+        return;
+      }
+
+      if (result.connectedDurationMs >= STABLE_CONNECTION_RESET_MS) {
+        retryAttempt = 0;
+      }
+
+      retryAttempt += 1;
+      const delayMs = computeReconnectDelayMs(retryAttempt);
+      const reason =
+        result.closeCode === null
+          ? `error: ${result.closeReason || 'unknown'}`
+          : `close ${result.closeCode}${result.closeReason ? ` (${result.closeReason})` : ''}`;
+
+      this.warn(`Gateway connection ended (${reason}). Reconnecting in ${delayMs}ms...`);
+      await sleep(delayMs);
+    }
   }
+}
+
+async function sleep(ms: number): Promise<void> {
+  await new Promise<void>((resolve) => {
+    setTimeout(resolve, ms);
+  });
 }

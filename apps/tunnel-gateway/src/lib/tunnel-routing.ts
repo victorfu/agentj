@@ -11,6 +11,8 @@ export interface TunnelNotFoundClosePayload {
 }
 
 export const TUNNEL_NOT_FOUND_CLOSE_REASON = 'Tunnel ID not found in gateway DB';
+const DNS_LABEL_PATTERN = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
+const MAX_SUBDOMAIN_LENGTH = 253;
 
 export function parseHostHeader(hostHeader: string | string[] | undefined): string {
   const raw = Array.isArray(hostHeader) ? hostHeader[0] : hostHeader;
@@ -58,7 +60,24 @@ export function resolveTunnelSubdomain(
     return null;
   }
 
+  if (!isValidTunnelSubdomain(subdomain)) {
+    return null;
+  }
+
   return subdomain;
+}
+
+export function isValidTunnelSubdomain(subdomain: string): boolean {
+  if (!subdomain || subdomain.length > MAX_SUBDOMAIN_LENGTH) {
+    return false;
+  }
+
+  const labels = subdomain.split('.');
+  if (labels.some((label) => !label || label.length > 63 || !DNS_LABEL_PATTERN.test(label))) {
+    return false;
+  }
+
+  return true;
 }
 
 export function buildTunnelHostContext(

@@ -1,11 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { toast } from 'sonner';
 import {
   Check,
-  ChevronDown,
-  ChevronRight,
   CircleAlert,
   Copy,
   ExternalLink,
@@ -28,29 +27,10 @@ import {
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
-import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-
-interface Tunnel {
-  id: string;
-  subdomain: string;
-  publicUrl: string;
-  status: 'offline' | 'online' | 'stopped';
-  targetHost: string;
-  targetPort: number;
-  createdAt: string;
-  updatedAt: string;
-}
 
 interface PatToken {
   id: string;
@@ -66,12 +46,6 @@ interface CreatedPatResponse {
   id: string;
   createdAt: string;
 }
-
-const PAT_TUNNELS_REFRESH_INTERVAL_MS = 5000;
-
-/* ------------------------------------------------------------------ */
-/*  Helper components                                                  */
-/* ------------------------------------------------------------------ */
 
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
@@ -104,43 +78,15 @@ function CopyButton({ text }: { text: string }) {
   );
 }
 
-const statusConfig = {
-  online: { color: 'bg-agentj-online', text: 'text-agentj-online', label: 'Online' },
-  offline: { color: 'bg-agentj-offline', text: 'text-muted-foreground', label: 'Offline' },
-  stopped: { color: 'bg-agentj-stopped', text: 'text-agentj-stopped', label: 'Stopped' },
-} as const;
-
-function StatusBadge({ status }: { status: Tunnel['status'] }) {
-  const cfg = statusConfig[status];
-
-  return (
-    <Badge variant="outline" className={`gap-1.5 border-transparent ${cfg.text}`}>
-      <span
-        className={`inline-block size-1.5 rounded-full ${cfg.color} ${status === 'online' ? 'motion-safe:animate-pulse' : ''}`}
-      />
-      {cfg.label}
-    </Badge>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/*  Main Dashboard                                                     */
-/* ------------------------------------------------------------------ */
-
 export function Dashboard() {
   const [pats, setPats] = useState<PatToken[]>([]);
   const [loadingPats, setLoadingPats] = useState(false);
   const [newlyCreatedToken, setNewlyCreatedToken] = useState<string | null>(null);
   const [creatingPat, setCreatingPat] = useState(false);
   const [revokingPatId, setRevokingPatId] = useState<string | null>(null);
-  const [selectedPatId, setSelectedPatId] = useState<string | null>(null);
-  const [patTunnels, setPatTunnels] = useState<Tunnel[]>([]);
-  const [loadingPatTunnels, setLoadingPatTunnels] = useState(false);
 
   useEffect(() => {
     setLoadingPats(true);
-    setSelectedPatId(null);
-    setPatTunnels([]);
     void fetch('/api/v1/pats')
       .then(async (res) => {
         if (!res.ok) throw new Error(await res.text());
@@ -152,59 +98,6 @@ export function Dashboard() {
       })
       .finally(() => setLoadingPats(false));
   }, []);
-
-  useEffect(() => {
-    if (!selectedPatId) return;
-
-    let isCurrent = true;
-
-    const loadPatTunnels = async (showLoading: boolean, silentError: boolean): Promise<void> => {
-      if (showLoading) {
-        setLoadingPatTunnels(true);
-      }
-
-      try {
-        const res = await fetch(`/api/v1/pats/${selectedPatId}/tunnels`);
-        if (!res.ok) {
-          throw new Error(await res.text());
-        }
-
-        const rows = (await res.json()) as Tunnel[];
-        if (!isCurrent) {
-          return;
-        }
-
-        setPatTunnels(rows);
-      } catch (error) {
-        if (!isCurrent || silentError) {
-          return;
-        }
-        toast.error('Failed to load tunnels', {
-          description: error instanceof Error ? error.message : 'Unknown error',
-        });
-      } finally {
-        if (showLoading && isCurrent) {
-          setLoadingPatTunnels(false);
-        }
-      }
-    };
-
-    void loadPatTunnels(true, false);
-    const timer = setInterval(() => {
-      void loadPatTunnels(false, true);
-    }, PAT_TUNNELS_REFRESH_INTERVAL_MS);
-
-    return () => {
-      isCurrent = false;
-      clearInterval(timer);
-    };
-  }, [selectedPatId]);
-
-  function togglePat(patId: string) {
-    setSelectedPatId((prev) => (prev === patId ? null : patId));
-    setPatTunnels([]);
-    setLoadingPatTunnels(false);
-  }
 
   async function createPat(): Promise<void> {
     setCreatingPat(true);
@@ -243,10 +136,6 @@ export function Dashboard() {
       });
       if (!response.ok) throw new Error(await response.text());
       setPats((prev) => prev.filter((p) => p.id !== patId));
-      if (selectedPatId === patId) {
-        setSelectedPatId(null);
-        setPatTunnels([]);
-      }
       toast.success('PAT revoked');
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to revoke PAT');
@@ -257,7 +146,7 @@ export function Dashboard() {
 
   return (
     <main className="mx-auto min-h-screen max-w-5xl px-4 pb-16 sm:px-6 lg:px-8">
-      {/* ── Header ──────────────────────────────────────────────── */}
+      {/* Header */}
       <header className="flex items-center justify-between py-5">
         <div className="flex items-center gap-3">
           <svg
@@ -280,6 +169,12 @@ export function Dashboard() {
         <div className="flex items-center gap-2">
           <ThemeToggle />
           <Button variant="outline" size="sm" asChild className="hidden sm:inline-flex">
+            <Link href="/tunnels">
+              <Globe className="size-4" />
+              Tunnels
+            </Link>
+          </Button>
+          <Button variant="outline" size="sm" asChild className="hidden sm:inline-flex">
             <a href="/docs" target="_blank" rel="noopener noreferrer">
               API Docs
               <ExternalLink />
@@ -290,7 +185,7 @@ export function Dashboard() {
 
       <Separator />
 
-      {/* ── PATs + Tunnels ─────────────────────────────────────── */}
+      {/* PATs */}
       <Card
         className="mt-6 animate-fade-up bg-card/80 backdrop-blur-sm"
         style={{ animationDelay: '60ms' }}
@@ -301,7 +196,7 @@ export function Dashboard() {
             PATs
           </CardTitle>
           <CardDescription>
-            Manage PATs. Click a row to reveal the full token and its tunnels.
+            Manage your Personal Access Tokens.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -339,131 +234,38 @@ export function Dashboard() {
             <p className="text-sm text-muted-foreground">No active PATs yet. Create one to start.</p>
           ) : (
             <div className="space-y-2">
-              {pats.map((pat) => {
-                const isSelected = selectedPatId === pat.id;
-                return (
-                  <div key={pat.id} className="rounded-lg border">
-                    {/* PAT row */}
-                    <div
-                      className="flex cursor-pointer items-center gap-3 px-4 py-3 transition hover:bg-muted/50"
-                      onClick={() => togglePat(pat.id)}
+              {pats.map((pat) => (
+                <div key={pat.id} className="rounded-lg border">
+                  <div className="flex items-center gap-3 px-4 py-3">
+                    <Link
+                      href={`/tunnels?pat=${pat.id}`}
+                      className="min-w-0 flex-1 transition hover:opacity-70"
                     >
-                      {isSelected ? (
-                        <ChevronDown className="size-4 shrink-0 text-muted-foreground" />
-                      ) : (
-                        <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
-                      )}
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate font-mono text-sm">{pat.prefix}...</p>
-                        <p className="text-xs text-muted-foreground">
-                          Created {new Date(pat.createdAt).toLocaleDateString()}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Badge variant="secondary" className="text-xs">
-                          {pat.scopes.length} scope{pat.scopes.length !== 1 ? 's' : ''}
-                        </Badge>
-                        <Button
-                          variant="destructive"
-                          size="sm"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            void revokePat(pat.id);
-                          }}
-                          disabled={revokingPatId === pat.id}
-                        >
-                          {revokingPatId === pat.id ? (
-                            <Loader2 className="animate-spin" />
-                          ) : (
-                            'Revoke'
-                          )}
-                        </Button>
-                      </div>
-                    </div>
-
-                    {/* Expanded tunnels */}
-                    {isSelected && (
-                      <div className="border-t bg-muted/20 px-4 py-3">
-                        <div className="mb-3 space-y-1">
-                          <p className="text-sm font-medium text-muted-foreground">PAT token</p>
-                          {pat.token ? (
-                            <div className="flex items-center gap-2 rounded-lg border bg-agentj-code p-3">
-                              <pre className="flex-1 overflow-x-auto font-mono text-sm leading-relaxed">
-                                {pat.token}
-                              </pre>
-                              <CopyButton text={pat.token} />
-                            </div>
-                          ) : (
-                            <p className="text-xs text-muted-foreground">
-                              Full token is unavailable for this PAT. Recreate the PAT if you need to copy it.
-                            </p>
-                          )}
-                        </div>
-
-                        <div className="mb-2 flex items-center gap-2 text-sm font-medium text-muted-foreground">
-                          <Globe className="size-4" />
-                          Tunnels
-                        </div>
-                        {loadingPatTunnels ? (
-                          <div className="space-y-2">
-                            {[1, 2].map((i) => (
-                              <Skeleton key={i} className="h-10 w-full rounded-md" />
-                            ))}
-                          </div>
-                        ) : patTunnels.length === 0 ? (
-                          <p className="py-4 text-center text-sm text-muted-foreground/60">
-                            No tunnels for this PAT. Create one using the CLI.
-                          </p>
+                      <p className="truncate font-mono text-sm">{pat.prefix}...</p>
+                      <p className="text-xs text-muted-foreground">
+                        Created {new Date(pat.createdAt).toLocaleDateString()}
+                      </p>
+                    </Link>
+                    <div className="flex items-center gap-2">
+                      <Badge variant="secondary" className="text-xs">
+                        {pat.scopes.length} scope{pat.scopes.length !== 1 ? 's' : ''}
+                      </Badge>
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={() => void revokePat(pat.id)}
+                        disabled={revokingPatId === pat.id}
+                      >
+                        {revokingPatId === pat.id ? (
+                          <Loader2 className="animate-spin" />
                         ) : (
-                          <div className="overflow-x-auto rounded-lg border bg-card">
-                            <Table>
-                              <TableHeader>
-                                <TableRow className="hover:bg-transparent">
-                                  <TableHead>Name</TableHead>
-                                  <TableHead>Status</TableHead>
-                                  <TableHead>Public URL</TableHead>
-                                  <TableHead className="text-right">Target</TableHead>
-                                </TableRow>
-                              </TableHeader>
-                              <TableBody>
-                                {patTunnels.map((tunnel) => (
-                                  <TableRow key={tunnel.id} className="group">
-                                    <TableCell>
-                                      <div>
-                                        <p className="font-semibold">{tunnel.subdomain}</p>
-                                        <p className="font-mono text-[11px] text-muted-foreground/50">
-                                          {tunnel.id}
-                                        </p>
-                                      </div>
-                                    </TableCell>
-                                    <TableCell>
-                                      <StatusBadge status={tunnel.status} />
-                                    </TableCell>
-                                    <TableCell>
-                                      <a
-                                        href={tunnel.publicUrl}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="inline-flex items-center gap-1.5 rounded-md bg-agentj-code px-2 py-1 font-mono text-xs text-primary transition hover:underline"
-                                      >
-                                        {tunnel.publicUrl}
-                                        <ExternalLink className="size-3 shrink-0 opacity-0 transition group-hover:opacity-100" />
-                                      </a>
-                                    </TableCell>
-                                    <TableCell className="text-right font-mono text-xs text-muted-foreground">
-                                      {tunnel.targetHost}:{tunnel.targetPort}
-                                    </TableCell>
-                                  </TableRow>
-                                ))}
-                              </TableBody>
-                            </Table>
-                          </div>
+                          'Revoke'
                         )}
-                      </div>
-                    )}
+                      </Button>
+                    </div>
                   </div>
-                );
-              })}
+                </div>
+              ))}
             </div>
           )}
 

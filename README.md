@@ -97,6 +97,13 @@ pnpm --filter @agentj/cli exec ./bin/run.js logs <tunnelId> --follow
   - 檢查網路品質與是否有封包丟失導致 `pong` 回覆中斷
   - 可調整 `AGENTJ_AGENT_PING_INTERVAL_MS`、`AGENTJ_AGENT_MAX_MISSED_PONGS`
   - 高負載時可調整 `AGENTJ_WS_SEND_HIGH_WATERMARK_BYTES`
+- Ingress 回 `TUNNEL_RECONNECTING`（HTTP 503）：
+  - 代表 agent 剛斷線且仍在重連寬限期
+  - 可調整 `AGENTJ_AGENT_RECONNECT_GRACE_MS`（預設 `5000`）
+- Ingress 回 `TUNNEL_BUSY`（HTTP 503）或 Public WS close `4429`：
+  - 代表 tunnel 正在被過多併發請求打滿，gateway 啟用保護機制
+  - 可調整 `AGENTJ_MAX_ACTIVE_STREAMS_PER_TUNNEL`（預設 `128`）
+  - 可調整 `AGENTJ_MAX_ACTIVE_STREAMS_GLOBAL`（預設 `4096`）
 - Tunnel logs 顯示請求狀態 `404`：
   - 代表請求已到上游 app，404 來自 `:8080` 的路由本身（不是 tunnel domain 問題）
 

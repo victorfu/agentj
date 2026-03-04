@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { toOutgoingHttpHeaders } from './lib/http-headers.js';
 import {
   TUNNEL_NOT_FOUND_CLOSE_REASON,
+  isValidTunnelSubdomain,
   parseHostHeader,
   resolveTunnelSubdomain,
   unknownTunnelClosePayload
@@ -36,6 +37,26 @@ describe('tunnel host resolution', () => {
   it('returns null for invalid host/domain', () => {
     const parsedHost = parseHostHeader('localhost:4000');
     expect(resolveTunnelSubdomain(parsedHost, 'tunnel.localhost')).toBeNull();
+  });
+
+  it('rejects invalid subdomain labels', () => {
+    const parsedHost = parseHostHeader('_abc.tunnel.localhost:4000');
+    expect(resolveTunnelSubdomain(parsedHost, 'tunnel.localhost')).toBeNull();
+  });
+});
+
+describe('subdomain validation', () => {
+  it('accepts dns-compliant labels', () => {
+    expect(isValidTunnelSubdomain('abc123')).toBe(true);
+    expect(isValidTunnelSubdomain('foo-bar.baz9')).toBe(true);
+  });
+
+  it('rejects invalid labels', () => {
+    expect(isValidTunnelSubdomain('')).toBe(false);
+    expect(isValidTunnelSubdomain('foo..bar')).toBe(false);
+    expect(isValidTunnelSubdomain('foo-')).toBe(false);
+    expect(isValidTunnelSubdomain('-foo')).toBe(false);
+    expect(isValidTunnelSubdomain('foo_bar')).toBe(false);
   });
 });
 

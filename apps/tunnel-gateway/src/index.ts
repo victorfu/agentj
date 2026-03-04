@@ -85,6 +85,7 @@ interface AgentConnection {
 interface StreamState {
   streamId: string;
   tunnelId: string;
+  agentSessionId: string;
   requestId: string;
   reply?: FastifyReply;
   wsSocket?: WebSocket;
@@ -102,6 +103,10 @@ interface StreamState {
 
 const agentsByTunnel = new Map<string, AgentConnection>();
 const streams = new Map<string, StreamState>();
+const streamsBySession = new Map<string, Set<string>>();
+const activeStreamsByTunnel = new Map<string, number>();
+const pendingOfflineTimersByTunnel = new Map<string, NodeJS.Timeout>();
+let activeStreamsGlobal = 0;
 
 const REDACT_HEADERS = new Set([
   'authorization',
@@ -113,6 +118,7 @@ const REDACT_HEADERS = new Set([
 
 const REQUEST_LOG_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 const CLEANUP_BATCH_SIZE = 1000;
+const WS_CLOSE_CODE_TUNNEL_BUSY = 4429;
 
 function runSafely(promise: Promise<unknown>, context: string): void {
   promise.catch((error: unknown) => {
@@ -152,14 +158,131 @@ function clearStreamTimeout(state: StreamState): void {
   }
 }
 
-function failActiveStreamsForTunnel(tunnelId: string, reason: string): void {
-  for (const state of streams.values()) {
-    if (state.tunnelId !== tunnelId) {
-      continue;
+function trackStreamBySession(state: StreamState): void {
+  const set = streamsBySession.get(state.agentSessionId) ?? new Set<string>();
+  set.add(state.streamId);
+  streamsBySession.set(state.agentSessionId, set);
+}
+
+function untrackStreamBySession(state: StreamState): void {
+  const set = streamsBySession.get(state.agentSessionId);
+  if (!set) {
+    return;
+  }
+
+  set.delete(state.streamId);
+  if (set.size === 0) {
+    streamsBySession.delete(state.agentSessionId);
+  }
+}
+
+function reserveStreamCapacity(tunnelId: string): boolean {
+  const tunnelActive = activeStreamsByTunnel.get(tunnelId) ?? 0;
+
+  if (activeStreamsGlobal >= env.AGENTJ_MAX_ACTIVE_STREAMS_GLOBAL) {
+    return false;
+  }
+
+  if (tunnelActive >= env.AGENTJ_MAX_ACTIVE_STREAMS_PER_TUNNEL) {
+    return false;
+  }
+
+  activeStreamsGlobal += 1;
+  activeStreamsByTunnel.set(tunnelId, tunnelActive + 1);
+  return true;
+}
+
+function releaseStreamCapacity(tunnelId: string): void {
+  if (activeStreamsGlobal > 0) {
+    activeStreamsGlobal -= 1;
+  }
+
+  const tunnelActive = activeStreamsByTunnel.get(tunnelId) ?? 0;
+  if (tunnelActive <= 1) {
+    activeStreamsByTunnel.delete(tunnelId);
+    return;
+  }
+
+  activeStreamsByTunnel.set(tunnelId, tunnelActive - 1);
+}
+
+function clearPendingOfflineTimer(tunnelId: string): void {
+  const timer = pendingOfflineTimersByTunnel.get(tunnelId);
+  if (!timer) {
+    return;
+  }
+
+  clearTimeout(timer);
+  pendingOfflineTimersByTunnel.delete(tunnelId);
+}
+
+function scheduleTunnelOfflineAfterGrace(tunnelId: string): void {
+  clearPendingOfflineTimer(tunnelId);
+
+  const timer = setTimeout(() => {
+    pendingOfflineTimersByTunnel.delete(tunnelId);
+    if (agentsByTunnel.has(tunnelId)) {
+      return;
     }
 
-    runSafely(failStream(state.streamId, 502, 'TUNNEL_OFFLINE', reason), `fail_stream:${state.streamId}`);
+    runSafely(
+      db
+        .update(tunnels)
+        .set({ status: 'offline', updatedAt: new Date() })
+        .where(eq(tunnels.id, tunnelId)),
+      `mark_tunnel_offline:${tunnelId}`
+    );
+  }, env.AGENTJ_AGENT_RECONNECT_GRACE_MS);
+  timer.unref();
+
+  pendingOfflineTimersByTunnel.set(tunnelId, timer);
+}
+
+function isTunnelReconnecting(tunnelId: string): boolean {
+  return pendingOfflineTimersByTunnel.has(tunnelId) && !agentsByTunnel.has(tunnelId);
+}
+
+function failActiveStreamsForSession(sessionId: string, reason: string): void {
+  const streamIds = [...(streamsBySession.get(sessionId) ?? [])];
+  for (const streamId of streamIds) {
+    runSafely(failStream(streamId, 502, 'TUNNEL_OFFLINE', reason), `fail_stream:${streamId}`);
   }
+}
+
+function resolveStreamForSession(
+  connection: AgentConnection,
+  streamId: string,
+  messageType: string
+): StreamState | null {
+  const state = streams.get(streamId);
+  if (!state) {
+    return null;
+  }
+
+  if (state.agentSessionId !== connection.sessionId) {
+    app.log.warn(
+      {
+        streamId,
+        messageType,
+        tunnelId: connection.tunnelId,
+        sessionId: connection.sessionId,
+        ownerSessionId: state.agentSessionId
+      },
+      'ignoring stream message from non-owner agent session'
+    );
+    return null;
+  }
+
+  return state;
+}
+
+function buildDisconnectReason(code: number, reason: Buffer): string {
+  const reasonText = reason.toString('utf8').trim();
+  if (!reasonText) {
+    return `socket_closed:${code}`;
+  }
+
+  return `socket_closed:${code}:${reasonText.slice(0, 120)}`;
 }
 
 setInterval(() => {
@@ -192,10 +315,30 @@ async function handleHttpIngress(request: FastifyRequest, reply: FastifyReply): 
 
   const agent = agentsByTunnel.get(tunnel.id);
   if (!agent) {
+    if (isTunnelReconnecting(tunnel.id)) {
+      reply.code(503).send({
+        error: {
+          code: 'TUNNEL_RECONNECTING',
+          message: 'Tunnel agent is reconnecting'
+        }
+      });
+      return;
+    }
+
     reply.code(410).send({
       error: {
         code: 'TUNNEL_OFFLINE',
         message: 'Tunnel is offline'
+      }
+    });
+    return;
+  }
+
+  if (!reserveStreamCapacity(tunnel.id)) {
+    reply.code(503).send({
+      error: {
+        code: 'TUNNEL_BUSY',
+        message: 'Tunnel is busy'
       }
     });
     return;
@@ -207,6 +350,7 @@ async function handleHttpIngress(request: FastifyRequest, reply: FastifyReply): 
   const state: StreamState = {
     streamId,
     tunnelId: tunnel.id,
+    agentSessionId: agent.sessionId,
     requestId,
     reply,
     requestBytes: 0,
@@ -220,19 +364,25 @@ async function handleHttpIngress(request: FastifyRequest, reply: FastifyReply): 
   };
 
   streams.set(streamId, state);
+  trackStreamBySession(state);
   armStreamTimeout(state);
 
-  await db.insert(ingressRequests).values({
-    id: requestId,
-    tunnelId: tunnel.id,
-    streamId,
-    method: request.method,
-    host: hostContext.parsedHost,
-    path: request.url.split('?')[0] ?? '/',
-    query: request.url.includes('?') ? request.url.split('?')[1] ?? '' : '',
-    requestHeaders: redactHeaders(request.headers),
-    responseHeaders: {}
-  });
+  try {
+    await db.insert(ingressRequests).values({
+      id: requestId,
+      tunnelId: tunnel.id,
+      streamId,
+      method: request.method,
+      host: hostContext.parsedHost,
+      path: request.url.split('?')[0] ?? '/',
+      query: request.url.includes('?') ? request.url.split('?')[1] ?? '' : '',
+      requestHeaders: redactHeaders(request.headers),
+      responseHeaders: {}
+    });
+  } catch (error) {
+    await failStream(streamId, 502, 'INGRESS_PERSIST_FAILED', (error as Error).message);
+    return;
+  }
 
   const startMessage: IngressRequestStartMessage = {
     type: 'ingress_request_start',
@@ -413,6 +563,7 @@ async function handleAgentConnection(socket: WebSocket, req: FastifyRequest): Pr
           if (existing && existing.sessionId !== sessionId) {
             existing.socket.close(4001, 'Superseded by newer agent session');
           }
+          clearPendingOfflineTimer(payload.tunnelId);
 
           activeConnection = {
             tunnelId: payload.tunnelId,
@@ -499,30 +650,24 @@ async function handleAgentConnection(socket: WebSocket, req: FastifyRequest): Pr
   }, env.AGENTJ_AGENT_PING_INTERVAL_MS);
   pingTimer.unref();
 
-  socket.on('close', () => {
+  socket.on('close', (code, reasonBuffer) => {
     clearTimeout(helloTimeout);
     clearInterval(pingTimer);
 
     if (activeConnection) {
+      failActiveStreamsForSession(activeConnection.sessionId, 'Agent disconnected');
+
       const latest = agentsByTunnel.get(activeConnection.tunnelId);
       if (latest?.sessionId === activeConnection.sessionId) {
         agentsByTunnel.delete(activeConnection.tunnelId);
-        failActiveStreamsForTunnel(activeConnection.tunnelId, 'Agent disconnected');
-
-        runSafely(
-          db
-            .update(tunnels)
-            .set({ status: 'offline', updatedAt: new Date() })
-            .where(eq(tunnels.id, activeConnection.tunnelId)),
-          `mark_tunnel_offline:${activeConnection.tunnelId}`
-        );
+        scheduleTunnelOfflineAfterGrace(activeConnection.tunnelId);
       }
     }
 
     runSafely(
       db
         .update(tunnelSessions)
-        .set({ disconnectReason: 'socket_closed' })
+        .set({ disconnectReason: buildDisconnectReason(code, reasonBuffer) })
         .where(eq(tunnelSessions.id, sessionId)),
       `disconnect_session:${sessionId}`
     );
@@ -544,7 +689,12 @@ async function handlePublicWebsocket(
 
   const agent = agentsByTunnel.get(tunnel.id);
   if (!agent) {
-    socket.close(4410, 'Tunnel offline');
+    socket.close(4410, isTunnelReconnecting(tunnel.id) ? 'Tunnel reconnecting' : 'Tunnel offline');
+    return;
+  }
+
+  if (!reserveStreamCapacity(tunnel.id)) {
+    socket.close(WS_CLOSE_CODE_TUNNEL_BUSY, 'Tunnel busy');
     return;
   }
 
@@ -555,6 +705,7 @@ async function handlePublicWebsocket(
   const state: StreamState = {
     streamId,
     tunnelId: tunnel.id,
+    agentSessionId: agent.sessionId,
     requestId,
     wsSocket: socket,
     wsSendQueue,
@@ -569,19 +720,25 @@ async function handlePublicWebsocket(
   };
 
   streams.set(streamId, state);
+  trackStreamBySession(state);
   armStreamTimeout(state);
 
-  await db.insert(ingressRequests).values({
-    id: requestId,
-    tunnelId: tunnel.id,
-    streamId,
-    method: request.method,
-    host: hostContext.parsedHost,
-    path: request.url.split('?')[0] ?? '/',
-    query: request.url.includes('?') ? (request.url.split('?')[1] ?? '') : '',
-    requestHeaders: redactHeaders(request.headers),
-    responseHeaders: {}
-  });
+  try {
+    await db.insert(ingressRequests).values({
+      id: requestId,
+      tunnelId: tunnel.id,
+      streamId,
+      method: request.method,
+      host: hostContext.parsedHost,
+      path: request.url.split('?')[0] ?? '/',
+      query: request.url.includes('?') ? (request.url.split('?')[1] ?? '') : '',
+      requestHeaders: redactHeaders(request.headers),
+      responseHeaders: {}
+    });
+  } catch (error) {
+    await failStream(streamId, 502, 'INGRESS_PERSIST_FAILED', (error as Error).message);
+    return;
+  }
 
   const startMessage: IngressRequestStartMessage = {
     type: 'ingress_request_start',
@@ -671,19 +828,19 @@ async function handleAgentMessage(
 
   switch (message.type) {
     case 'agent_response_start': {
-      await onAgentResponseStart(message);
+      await onAgentResponseStart(connection, message);
       return;
     }
     case 'agent_response_chunk': {
-      await onAgentResponseChunk(message);
+      await onAgentResponseChunk(connection, message);
       return;
     }
     case 'agent_response_end': {
-      await onAgentResponseEnd(message);
+      await onAgentResponseEnd(connection, message);
       return;
     }
     case 'stream_error': {
-      await onStreamError(message);
+      await onStreamError(connection, message);
       return;
     }
     default:
@@ -691,8 +848,11 @@ async function handleAgentMessage(
   }
 }
 
-async function onAgentResponseStart(message: AgentResponseStartMessage): Promise<void> {
-  const state = streams.get(message.streamId);
+async function onAgentResponseStart(
+  connection: AgentConnection,
+  message: AgentResponseStartMessage
+): Promise<void> {
+  const state = resolveStreamForSession(connection, message.streamId, message.type);
   if (!state) {
     return;
   }
@@ -708,8 +868,11 @@ async function onAgentResponseStart(message: AgentResponseStartMessage): Promise
     .where(eq(ingressRequests.id, state.requestId));
 }
 
-async function onAgentResponseChunk(message: AgentResponseChunkMessage): Promise<void> {
-  const state = streams.get(message.streamId);
+async function onAgentResponseChunk(
+  connection: AgentConnection,
+  message: AgentResponseChunkMessage
+): Promise<void> {
+  const state = resolveStreamForSession(connection, message.streamId, message.type);
   if (!state) {
     return;
   }
@@ -735,8 +898,11 @@ async function onAgentResponseChunk(message: AgentResponseChunkMessage): Promise
   await persistChunk(state, 'response', message.chunkIndex, data, message.isBinary, null);
 }
 
-async function onAgentResponseEnd(message: AgentResponseEndMessage): Promise<void> {
-  const state = streams.get(message.streamId);
+async function onAgentResponseEnd(
+  connection: AgentConnection,
+  message: AgentResponseEndMessage
+): Promise<void> {
+  const state = resolveStreamForSession(connection, message.streamId, message.type);
   if (!state) {
     return;
   }
@@ -752,8 +918,13 @@ async function onAgentResponseEnd(message: AgentResponseEndMessage): Promise<voi
   await finalizeStream(message.streamId, null, null);
 }
 
-async function onStreamError(message: StreamErrorMessage): Promise<void> {
-  await failStream(message.streamId, 502, 'UPSTREAM_STREAM_ERROR', message.message);
+async function onStreamError(connection: AgentConnection, message: StreamErrorMessage): Promise<void> {
+  const state = resolveStreamForSession(connection, message.streamId, message.type);
+  if (!state) {
+    return;
+  }
+
+  await failStream(state.streamId, 502, 'UPSTREAM_STREAM_ERROR', message.message);
 }
 
 async function failStream(
@@ -802,19 +973,25 @@ async function finalizeStream(
   const endedAt = new Date();
   const latencyMs = endedAt.getTime() - state.startedAtMs;
 
-  await db
-    .update(ingressRequests)
-    .set({
-      statusCode: statusCode ?? undefined,
-      latencyMs,
-      endedAt
-    })
-    .where(eq(ingressRequests.id, state.requestId));
+  try {
+    await db
+      .update(ingressRequests)
+      .set({
+        statusCode: statusCode ?? undefined,
+        latencyMs,
+        endedAt
+      })
+      .where(eq(ingressRequests.id, state.requestId));
+  } catch (error) {
+    app.log.warn({ streamId, error }, 'failed to persist finalized stream state');
+  }
 
   if (errorMessage) {
     app.log.warn({ streamId, errorMessage }, 'stream error');
   }
 
+  untrackStreamBySession(state);
+  releaseStreamCapacity(state.tunnelId);
   streams.delete(streamId);
 }
 
@@ -933,6 +1110,10 @@ function redactHeaders(
 }
 
 const shutdown = async () => {
+  for (const timer of pendingOfflineTimersByTunnel.values()) {
+    clearTimeout(timer);
+  }
+  pendingOfflineTimersByTunnel.clear();
   await app.close();
   await pool.end();
 };

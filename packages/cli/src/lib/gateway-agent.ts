@@ -40,10 +40,21 @@ interface PendingWsStream {
 
 const DEFAULT_WS_SEND_HIGH_WATERMARK_BYTES = 1048576;
 const DEFAULT_WS_SEND_TIMEOUT_MS = 60000;
+const RECONNECT_BASE_DELAY_MS = 1000;
+const RECONNECT_MAX_DELAY_MS = 15000;
+const RECONNECT_JITTER_RATIO = 0.2;
+const NON_RETRYABLE_CLOSE_CODES = new Set([4400, 4401, 4404]);
 
 export interface GatewayCloseAction {
   shouldExitNonZero: boolean;
   message: string;
+}
+
+export interface AgentRunResult {
+  closeCode: number | null;
+  closeReason: string;
+  retryable: boolean;
+  connectedDurationMs: number;
 }
 
 export function mapGatewayCloseAction(code: number): GatewayCloseAction | null {
@@ -57,6 +68,20 @@ export function mapGatewayCloseAction(code: number): GatewayCloseAction | null {
         '- AGENTJ_TUNNEL_BASE_DOMAIN\n' +
         '- AGENTJ_CONNECT_TOKEN_SECRET\n' +
         '- AGENTJ_GATEWAY_WS_PUBLIC_URL'
+    };
+  }
+
+  if (code === 4401) {
+    return {
+      shouldExitNonZero: true,
+      message: 'Gateway rejected connection (4401): invalid or expired connect token.'
+    };
+  }
+
+  if (code === 4400) {
+    return {
+      shouldExitNonZero: true,
+      message: 'Gateway closed connection (4400): malformed websocket message.'
     };
   }
 
@@ -84,6 +109,32 @@ export function mapGatewayCloseAction(code: number): GatewayCloseAction | null {
   return null;
 }
 
+export function isRetryableGatewayCloseCode(code: number): boolean {
+  if (NON_RETRYABLE_CLOSE_CODES.has(code)) {
+    return false;
+  }
+
+  if (code === 1000) {
+    return false;
+  }
+
+  return true;
+}
+
+export function computeReconnectDelayMs(attempt: number, randomValue: number = Math.random()): number {
+  const safeAttempt = Math.max(1, Math.floor(attempt));
+  const exponentialDelay = Math.min(
+    RECONNECT_MAX_DELAY_MS,
+    RECONNECT_BASE_DELAY_MS * 2 ** (safeAttempt - 1)
+  );
+
+  const normalizedRandom = Math.min(1, Math.max(0, randomValue));
+  const jitterSpan = exponentialDelay * RECONNECT_JITTER_RATIO;
+  const jittered = exponentialDelay + (normalizedRandom * 2 - 1) * jitterSpan;
+
+  return Math.max(0, Math.min(RECONNECT_MAX_DELAY_MS, Math.round(jittered)));
+}
+
 function resolveWsBackpressureOptions(env: NodeJS.ProcessEnv = process.env): WebSocketBackpressureOptions {
   return {
     highWatermarkBytes: readPositiveInt(
@@ -107,7 +158,7 @@ function readPositiveInt(value: string | undefined, defaultValue: number): numbe
   return Math.floor(parsed);
 }
 
-export async function runAgent(options: AgentOptions): Promise<void> {
+export async function runAgent(options: AgentOptions): Promise<AgentRunResult> {
   const pendingHttp = new Map<string, PendingHttpStream>();
   const pendingWs = new Map<string, PendingWsStream>();
   const agentInstanceId = `agent_${crypto.randomUUID()}`;
@@ -121,6 +172,7 @@ export async function runAgent(options: AgentOptions): Promise<void> {
   const gatewaySendQueue = new WebSocketSendQueue(ws, wsBackpressureOptions);
 
   await onceOpen(ws);
+  const connectedAtMs = Date.now();
 
   await gatewaySendQueue.send(
     serializeGatewayMessage({
@@ -145,7 +197,13 @@ export async function runAgent(options: AgentOptions): Promise<void> {
     });
   });
 
-  ws.on('close', (code) => {
+  let cleanedUp = false;
+  const cleanupStreams = () => {
+    if (cleanedUp) {
+      return;
+    }
+    cleanedUp = true;
+
     for (const stream of pendingHttp.values()) {
       stream.request.destroy();
     }
@@ -155,14 +213,14 @@ export async function runAgent(options: AgentOptions): Promise<void> {
       stream.socket.close();
     }
     pendingWs.clear();
+  };
 
-    const closeAction = mapGatewayCloseAction(code);
-    if (closeAction) {
-      console.error(closeAction.message);
-      if (closeAction.shouldExitNonZero) {
-        process.exitCode = 1;
-      }
-    }
+  ws.on('close', () => {
+    cleanupStreams();
+  });
+
+  ws.on('error', () => {
+    cleanupStreams();
   });
 
   async function handleMessage(message: GatewayMessage): Promise<void> {
@@ -320,9 +378,35 @@ export async function runAgent(options: AgentOptions): Promise<void> {
     });
   }
 
-  await new Promise<void>((resolve, reject) => {
-    ws.once('close', () => resolve());
-    ws.once('error', (error) => reject(error));
+  return await new Promise<AgentRunResult>((resolve) => {
+    let settled = false;
+
+    const done = (result: AgentRunResult) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      resolve(result);
+    };
+
+    ws.once('close', (code, reasonBuffer) => {
+      const reasonText = reasonBuffer.toString('utf8');
+      done({
+        closeCode: code,
+        closeReason: reasonText,
+        retryable: isRetryableGatewayCloseCode(code),
+        connectedDurationMs: Date.now() - connectedAtMs
+      });
+    });
+
+    ws.once('error', (error) => {
+      done({
+        closeCode: null,
+        closeReason: error.message,
+        retryable: true,
+        connectedDurationMs: Date.now() - connectedAtMs
+      });
+    });
   });
 }
 
