@@ -7,5 +7,6 @@ onlyBuiltDependencies:
   - '@tailwindcss/oxide'
   - esbuild
   - keytar
+  - msw
   - sharp
   - unrs-resolver

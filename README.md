@@ -13,7 +13,7 @@ Agentj 是一個 pnpm monorepo，用來跑本地 tunneling 平台，包含 Web d
 
 ## 先決條件
 
-- Node.js 24 LTS
+- Node.js 22 LTS
 - pnpm 10+
 - PostgreSQL 16+
 
@@ -127,6 +127,11 @@ pnpm db:docker:bootstrap
 - Dashboard: `http://app.localhost`
 - Control API base: `http://app.localhost/api/v1`
 - Gateway WS endpoint: `ws://gateway:4000/agent/v1/connect`
+
+## Production Deployment (GCP)
+
+- 完整流程與範本：[`docs/deployment-gcp-production.md`](docs/deployment-gcp-production.md)
+- MVP 一鍵安裝腳本：`bash scripts/deploy/gce-onevm-install.sh --help`
 
 ## 其他文件
 
