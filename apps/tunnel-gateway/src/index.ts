@@ -335,6 +335,26 @@ async function handleAgentConnection(socket: WebSocket, req: FastifyRequest): Pr
   let pingSendInFlight = false;
   const agentSendQueue = createSocketSendQueue(socket);
   const heartbeatState = createAgentHeartbeatState(env.AGENTJ_AGENT_MAX_MISSED_PONGS);
+  const markMissedHeartbeatAndMaybeClose = (reason: 'ping_send_failed' | 'pong_missing'): void => {
+    if (!activeConnection) {
+      return;
+    }
+
+    if (!markAgentPingAndShouldClose(heartbeatState)) {
+      return;
+    }
+
+    app.log.warn(
+      {
+        tunnelId: activeConnection.tunnelId,
+        sessionId,
+        missedPongs: heartbeatState.missedPongs,
+        reason
+      },
+      'agent heartbeat timeout'
+    );
+    socket.close(4411, 'Heartbeat timeout');
+  };
 
   const helloTimeout = setTimeout(() => {
     if (!activeConnection) {
@@ -466,22 +486,13 @@ async function handleAgentConnection(socket: WebSocket, req: FastifyRequest): Pr
           );
         } catch (error) {
           app.log.warn({ error, sessionId }, 'failed to send websocket ping');
+          markMissedHeartbeatAndMaybeClose('ping_send_failed');
           return;
         } finally {
           pingSendInFlight = false;
         }
 
-        if (!activeConnection) {
-          return;
-        }
-
-        if (markAgentPingAndShouldClose(heartbeatState)) {
-          app.log.warn(
-            { tunnelId: activeConnection.tunnelId, sessionId, missedPongs: heartbeatState.missedPongs },
-            'agent heartbeat timeout'
-          );
-          socket.close(4411, 'Heartbeat timeout');
-        }
+        markMissedHeartbeatAndMaybeClose('pong_missing');
       })(),
       `send_ping:${sessionId}`
     );

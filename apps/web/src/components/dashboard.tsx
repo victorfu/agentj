@@ -67,6 +67,8 @@ interface CreatedPatResponse {
   createdAt: string;
 }
 
+const PAT_TUNNELS_REFRESH_INTERVAL_MS = 5000;
+
 /* ------------------------------------------------------------------ */
 /*  Helper components                                                  */
 /* ------------------------------------------------------------------ */
@@ -153,22 +155,55 @@ export function Dashboard() {
 
   useEffect(() => {
     if (!selectedPatId) return;
-    setLoadingPatTunnels(true);
-    void fetch(`/api/v1/pats/${selectedPatId}/tunnels`)
-      .then(async (res) => {
-        if (!res.ok) throw new Error(await res.text());
-        return res.json() as Promise<Tunnel[]>;
-      })
-      .then(setPatTunnels)
-      .catch((err: Error) => {
-        toast.error('Failed to load tunnels', { description: err.message });
-      })
-      .finally(() => setLoadingPatTunnels(false));
+
+    let isCurrent = true;
+
+    const loadPatTunnels = async (showLoading: boolean, silentError: boolean): Promise<void> => {
+      if (showLoading) {
+        setLoadingPatTunnels(true);
+      }
+
+      try {
+        const res = await fetch(`/api/v1/pats/${selectedPatId}/tunnels`);
+        if (!res.ok) {
+          throw new Error(await res.text());
+        }
+
+        const rows = (await res.json()) as Tunnel[];
+        if (!isCurrent) {
+          return;
+        }
+
+        setPatTunnels(rows);
+      } catch (error) {
+        if (!isCurrent || silentError) {
+          return;
+        }
+        toast.error('Failed to load tunnels', {
+          description: error instanceof Error ? error.message : 'Unknown error',
+        });
+      } finally {
+        if (showLoading && isCurrent) {
+          setLoadingPatTunnels(false);
+        }
+      }
+    };
+
+    void loadPatTunnels(true, false);
+    const timer = setInterval(() => {
+      void loadPatTunnels(false, true);
+    }, PAT_TUNNELS_REFRESH_INTERVAL_MS);
+
+    return () => {
+      isCurrent = false;
+      clearInterval(timer);
+    };
   }, [selectedPatId]);
 
   function togglePat(patId: string) {
     setSelectedPatId((prev) => (prev === patId ? null : patId));
     setPatTunnels([]);
+    setLoadingPatTunnels(false);
   }
 
   async function createPat(): Promise<void> {

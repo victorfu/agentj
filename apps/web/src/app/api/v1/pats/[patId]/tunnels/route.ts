@@ -1,12 +1,13 @@
-import { and, desc, eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { type NextRequest } from 'next/server';
 
-import { patTokens, tunnels } from '@agentj/contracts';
+import { patTokens } from '@agentj/contracts';
 
 import { db } from '@/lib/db';
 import { getWebEnv } from '@/lib/env';
 import { jsonError, jsonNoStore } from '@/lib/http';
 import { ensureMvpUser } from '@/lib/mvp-user';
+import { listAccessibleTunnels } from '@/lib/tunnel-access';
 
 export const dynamic = 'force-dynamic';
 
@@ -35,11 +36,7 @@ export async function GET(
     return jsonError('NOT_FOUND', 'PAT not found', 404);
   }
 
-  const rows = await db
-    .select()
-    .from(tunnels)
-    .where(eq(tunnels.patTokenId, patId))
-    .orderBy(desc(tunnels.createdAt));
+  const rows = await listAccessibleTunnels(user.id, patId);
 
   return jsonNoStore(
     rows.map((row) => ({
