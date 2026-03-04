@@ -1,0 +1,80 @@
+name: agentj-onevm
+
+x-app-runtime: &app-runtime
+  build:
+    context: ../..
+    dockerfile: infra/docker/Dockerfile.app
+  image: agentj-app:${IMAGE_TAG:-local}
+
+services:
+  cloud-sql-proxy:
+    image: gcr.io/cloud-sql-connectors/cloud-sql-proxy:2.18.2
+    command:
+      - --structured-logs
+      - --address=0.0.0.0
+      - --port=5432
+      - ${INSTANCE_CONNECTION_NAME}
+    restart: unless-stopped
+
+  web:
+    <<: *app-runtime
+    depends_on:
+      - cloud-sql-proxy
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: ${DATABASE_URL}
+      AGENTJ_TUNNEL_BASE_DOMAIN: ${TUNNEL_BASE_DOMAIN}
+      AGENTJ_TUNNEL_PUBLIC_SCHEME: https
+      AGENTJ_TUNNEL_PUBLIC_PORT: "443"
+      AGENTJ_CONNECT_TOKEN_SECRET: ${AGENTJ_CONNECT_TOKEN_SECRET}
+      AGENTJ_GATEWAY_WS_PUBLIC_URL: wss://${GATEWAY_DOMAIN}/agent/v1/connect
+    command: sh -lc "pnpm --filter @agentj/web start --hostname 0.0.0.0 --port 3000"
+    restart: unless-stopped
+
+  gateway:
+    <<: *app-runtime
+    depends_on:
+      - cloud-sql-proxy
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: ${DATABASE_URL}
+      AGENTJ_TUNNEL_BASE_DOMAIN: ${TUNNEL_BASE_DOMAIN}
+      AGENTJ_CONNECT_TOKEN_SECRET: ${AGENTJ_CONNECT_TOKEN_SECRET}
+      PORT: "4000"
+    command: sh -lc "pnpm --filter @agentj/tunnel-gateway start"
+    restart: unless-stopped
+
+  migrate:
+    <<: *app-runtime
+    depends_on:
+      - cloud-sql-proxy
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+    command: sh -lc "node --import tsx packages/contracts/scripts/migrate.ts"
+    restart: "no"
+
+  caddy:
+    build:
+      context: ./caddy
+      dockerfile: Dockerfile
+    image: agentj-caddy:${IMAGE_TAG:-local}
+    depends_on:
+      - web
+      - gateway
+    environment:
+      GCP_PROJECT_ID: ${GCP_PROJECT_ID}
+      APP_DOMAIN: ${APP_DOMAIN}
+      GATEWAY_DOMAIN: ${GATEWAY_DOMAIN}
+      TUNNEL_BASE_DOMAIN: ${TUNNEL_BASE_DOMAIN}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile.prod:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    restart: unless-stopped
+
+volumes:
+  caddy_data:
+  caddy_config:

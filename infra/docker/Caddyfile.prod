@@ -1,0 +1,21 @@
+(dns_tls) {
+	tls {
+		dns googleclouddns {$GCP_PROJECT_ID}
+	}
+}
+
+{$APP_DOMAIN} {
+	import dns_tls
+	encode gzip zstd
+	reverse_proxy web:3000
+}
+
+{$GATEWAY_DOMAIN} {
+	import dns_tls
+	reverse_proxy gateway:4000
+}
+
+*.{$TUNNEL_BASE_DOMAIN} {
+	import dns_tls
+	reverse_proxy gateway:4000
+}
