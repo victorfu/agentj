@@ -1,21 +1,21 @@
-(dns_tls) {
-	tls {
-		dns googleclouddns {$GCP_PROJECT_ID}
+{
+	on_demand_tls {
+		ask http://gateway:4000/healthz
 	}
 }
 
 {$APP_DOMAIN} {
-	import dns_tls
 	encode gzip zstd
 	reverse_proxy web:3000
 }
 
 {$GATEWAY_DOMAIN} {
-	import dns_tls
 	reverse_proxy gateway:4000
 }
 
 *.{$TUNNEL_BASE_DOMAIN} {
-	import dns_tls
+	tls {
+		on_demand
+	}
 	reverse_proxy gateway:4000
 }

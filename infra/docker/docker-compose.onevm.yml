@@ -7,22 +7,29 @@ x-app-runtime: &app-runtime
   image: agentj-app:${IMAGE_TAG:-local}
 
 services:
-  cloud-sql-proxy:
-    image: gcr.io/cloud-sql-connectors/cloud-sql-proxy:2.18.2
-    command:
-      - --structured-logs
-      - --address=0.0.0.0
-      - --port=5432
-      - ${INSTANCE_CONNECTION_NAME}
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: agentj
+      POSTGRES_USER: agentj
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U agentj -d agentj"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
     restart: unless-stopped
 
   web:
     <<: *app-runtime
     depends_on:
-      - cloud-sql-proxy
+      postgres:
+        condition: service_healthy
     environment:
       NODE_ENV: production
-      DATABASE_URL: ${DATABASE_URL}
+      DATABASE_URL: postgresql://agentj:${POSTGRES_PASSWORD}@postgres:5432/agentj
       AGENTJ_TUNNEL_BASE_DOMAIN: ${TUNNEL_BASE_DOMAIN}
       AGENTJ_TUNNEL_PUBLIC_SCHEME: https
       AGENTJ_TUNNEL_PUBLIC_PORT: "443"
@@ -34,10 +41,11 @@ services:
   gateway:
     <<: *app-runtime
     depends_on:
-      - cloud-sql-proxy
+      postgres:
+        condition: service_healthy
     environment:
       NODE_ENV: production
-      DATABASE_URL: ${DATABASE_URL}
+      DATABASE_URL: postgresql://agentj:${POSTGRES_PASSWORD}@postgres:5432/agentj
       AGENTJ_TUNNEL_BASE_DOMAIN: ${TUNNEL_BASE_DOMAIN}
       AGENTJ_CONNECT_TOKEN_SECRET: ${AGENTJ_CONNECT_TOKEN_SECRET}
       PORT: "4000"
@@ -47,22 +55,19 @@ services:
   migrate:
     <<: *app-runtime
     depends_on:
-      - cloud-sql-proxy
+      postgres:
+        condition: service_healthy
     environment:
-      DATABASE_URL: ${DATABASE_URL}
+      DATABASE_URL: postgresql://agentj:${POSTGRES_PASSWORD}@postgres:5432/agentj
     command: sh -lc "node --import tsx packages/contracts/scripts/migrate.ts"
     restart: "no"
 
   caddy:
-    build:
-      context: ./caddy
-      dockerfile: Dockerfile
-    image: agentj-caddy:${IMAGE_TAG:-local}
+    image: caddy:2.10.2-alpine
     depends_on:
       - web
       - gateway
     environment:
-      GCP_PROJECT_ID: ${GCP_PROJECT_ID}
       APP_DOMAIN: ${APP_DOMAIN}
       GATEWAY_DOMAIN: ${GATEWAY_DOMAIN}
       TUNNEL_BASE_DOMAIN: ${TUNNEL_BASE_DOMAIN}
@@ -76,5 +81,6 @@ services:
     restart: unless-stopped
 
 volumes:
+  postgres_data:
   caddy_data:
   caddy_config:

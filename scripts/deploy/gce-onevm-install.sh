@@ -9,30 +9,26 @@ COMPOSE_FILE="${REPO_ROOT}/infra/docker/docker-compose.onevm.yml"
 INSTALL_DOCKER=1
 IMAGE_TAG="local"
 
-GCP_PROJECT_ID=""
-INSTANCE_CONNECTION_NAME=""
-DATABASE_URL=""
 APP_DOMAIN=""
 GATEWAY_DOMAIN=""
 TUNNEL_BASE_DOMAIN=""
 AGENTJ_CONNECT_TOKEN_SECRET=""
+POSTGRES_PASSWORD=""
 
 usage() {
   cat <<'EOF'
 Usage:
   bash scripts/deploy/gce-onevm-install.sh \
-    --gcp-project-id <project-id> \
-    --instance-connection-name <project:region:instance> \
-    --database-url <postgresql://...> \
     --app-domain <app.example.com> \
     --gateway-domain <gateway.example.com> \
     --tunnel-base-domain <tunnel.example.com> \
     --connect-token-secret <strong-secret> \
-    [--image-tag <tag>] \
+    [--db-password <password>]       # auto-generated if omitted
+    [--image-tag <tag>]
     [--skip-docker-install]
 
 Description:
-  One-command setup for a single GCE VM:
+  One-command setup for a single VM (all-in-one Docker deployment):
   1) install Docker + Compose plugin (unless --skip-docker-install)
   2) generate infra/docker/.env.prod
   3) docker compose build + migrate + up
@@ -40,11 +36,11 @@ EOF
 }
 
 log() {
-  printf '[gce-onevm] %s\n' "$*"
+  printf '[onevm] %s\n' "$*"
 }
 
 die() {
-  printf '[gce-onevm] ERROR: %s\n' "$*" >&2
+  printf '[onevm] ERROR: %s\n' "$*" >&2
   exit 1
 }
 
@@ -58,18 +54,6 @@ require_arg() {
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --gcp-project-id)
-      GCP_PROJECT_ID="${2:-}"
-      shift 2
-      ;;
-    --instance-connection-name)
-      INSTANCE_CONNECTION_NAME="${2:-}"
-      shift 2
-      ;;
-    --database-url)
-      DATABASE_URL="${2:-}"
-      shift 2
-      ;;
     --app-domain)
       APP_DOMAIN="${2:-}"
       shift 2
@@ -84,6 +68,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --connect-token-secret)
       AGENTJ_CONNECT_TOKEN_SECRET="${2:-}"
+      shift 2
+      ;;
+    --db-password)
+      POSTGRES_PASSWORD="${2:-}"
       shift 2
       ;;
     --image-tag)
@@ -104,9 +92,6 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-require_arg "--gcp-project-id" "$GCP_PROJECT_ID"
-require_arg "--instance-connection-name" "$INSTANCE_CONNECTION_NAME"
-require_arg "--database-url" "$DATABASE_URL"
 require_arg "--app-domain" "$APP_DOMAIN"
 require_arg "--gateway-domain" "$GATEWAY_DOMAIN"
 require_arg "--tunnel-base-domain" "$TUNNEL_BASE_DOMAIN"
@@ -114,6 +99,11 @@ require_arg "--connect-token-secret" "$AGENTJ_CONNECT_TOKEN_SECRET"
 
 if [[ ${#AGENTJ_CONNECT_TOKEN_SECRET} -lt 16 ]]; then
   die "--connect-token-secret must be at least 16 characters"
+fi
+
+if [[ -z "$POSTGRES_PASSWORD" ]]; then
+  POSTGRES_PASSWORD="$(openssl rand -base64 24 | tr -d '/+=' | head -c 32)"
+  log "Auto-generated DB password: ${POSTGRES_PASSWORD}"
 fi
 
 if [[ ! -f "$COMPOSE_FILE" ]]; then
@@ -148,16 +138,14 @@ if ! docker info >/dev/null 2>&1; then
 fi
 
 log "Writing ${ENV_FILE}"
-cat >"$ENV_FILE" <<EOF
-GCP_PROJECT_ID=${GCP_PROJECT_ID}
-INSTANCE_CONNECTION_NAME=${INSTANCE_CONNECTION_NAME}
-DATABASE_URL=${DATABASE_URL}
-APP_DOMAIN=${APP_DOMAIN}
-GATEWAY_DOMAIN=${GATEWAY_DOMAIN}
-TUNNEL_BASE_DOMAIN=${TUNNEL_BASE_DOMAIN}
-AGENTJ_CONNECT_TOKEN_SECRET=${AGENTJ_CONNECT_TOKEN_SECRET}
-IMAGE_TAG=${IMAGE_TAG}
-EOF
+{
+  printf 'POSTGRES_PASSWORD=%s\n' "$POSTGRES_PASSWORD"
+  printf 'APP_DOMAIN=%s\n' "$APP_DOMAIN"
+  printf 'GATEWAY_DOMAIN=%s\n' "$GATEWAY_DOMAIN"
+  printf 'TUNNEL_BASE_DOMAIN=%s\n' "$TUNNEL_BASE_DOMAIN"
+  printf 'AGENTJ_CONNECT_TOKEN_SECRET=%s\n' "$AGENTJ_CONNECT_TOKEN_SECRET"
+  printf 'IMAGE_TAG=%s\n' "$IMAGE_TAG"
+} >"$ENV_FILE"
 
 log "Building images"
 "${DOCKER_CMD[@]}" compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" build
@@ -166,7 +154,7 @@ log "Running database migration"
 "${DOCKER_CMD[@]}" compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" run --rm migrate
 
 log "Starting services"
-"${DOCKER_CMD[@]}" compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" up -d --remove-orphans
+"${DOCKER_CMD[@]}" compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" up -d --remove-orphans --scale migrate=0
 
 log "Done"
 log "Web health: https://${APP_DOMAIN}/api/v1/healthz"

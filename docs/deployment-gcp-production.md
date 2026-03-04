@@ -1,129 +1,61 @@
-# Agentj MVP Deployment (Single GCE VM + One-Click Docker)
+# Agentj One-VM Deployment (All-in-One Docker)
 
-這份文件是最短上線路徑：一台 GCE VM 直接跑 `web + gateway + caddy + cloud-sql-proxy`，用一支 script 完成安裝與啟動。
+一台 VM 跑 `postgres + web + gateway + caddy`，用一支 script 完成安裝與啟動。
+適合快速建置、測試 tunnel 穩定性。
 
 ## 1. 拓樸
 
 ```text
 Internet
-  └─ VM:80/443 (Caddy)
+  └─ VM:80/443 (Caddy, auto HTTPS via HTTP-01)
       ├─ https://APP_DOMAIN                -> web:3000
       ├─ https://GATEWAY_DOMAIN            -> gateway:4000
       └─ https://*.TUNNEL_BASE_DOMAIN      -> gateway:4000
 
-web/gateway/migrate -> cloud-sql-proxy:5432 -> Cloud SQL (PostgreSQL)
+web/gateway/migrate -> postgres:5432 (Docker container)
 ```
 
-## 2. 一鍵部署需要的變數
+## 2. 前提條件
 
-| 變數 | 說明 |
+- 一台 VM（任何雲平台或實體機），建議至少 2 vCPU / 4 GB RAM
+- Ubuntu 22.04+ 或 Debian 12+（deploy script 用 apt 安裝 Docker）
+- 三個域名（或子網域）指向 VM 的公網 IP：
+  - `APP_DOMAIN`（例如 `app.example.com`）
+  - `GATEWAY_DOMAIN`（例如 `gateway.example.com`）
+  - `*.TUNNEL_BASE_DOMAIN`（例如 `*.tunnel.example.com`）
+- Port 80 和 443 對外開放（Caddy 需要 80 做 HTTP-01 challenge）
+
+## 3. 部署參數
+
+| 參數 | 說明 |
 | --- | --- |
-| `GCP_PROJECT_ID` | GCP 專案 ID（給 Caddy DNS challenge 用） |
-| `INSTANCE_CONNECTION_NAME` | Cloud SQL 連線名稱（`project:region:instance`） |
-| `DATABASE_URL` | 連線字串（host 必須是 `cloud-sql-proxy`） |
-| `APP_DOMAIN` | Web 網域（例如 `app.example.com`） |
-| `GATEWAY_DOMAIN` | Gateway 網域（例如 `gateway.example.com`） |
-| `TUNNEL_BASE_DOMAIN` | Tunnel 基底網域（例如 `tunnel.example.com`） |
-| `AGENTJ_CONNECT_TOKEN_SECRET` | Web/Gateway 共用 secret（至少 16 字元） |
-| `IMAGE_TAG` | 本地映像 tag（預設 `local`，可選） |
+| `--app-domain` | Web 網域 |
+| `--gateway-domain` | Gateway 網域 |
+| `--tunnel-base-domain` | Tunnel 基底網域 |
+| `--connect-token-secret` | Web/Gateway 共用 secret（至少 16 字元） |
+| `--db-password` | PostgreSQL 密碼（省略則自動生成） |
+| `--image-tag` | Docker image tag（預設 `local`） |
+| `--skip-docker-install` | 跳過 Docker 安裝（已裝好時使用） |
 
-`DATABASE_URL` 範例：
-
-```text
-postgresql://agentj:<db-password>@cloud-sql-proxy:5432/agentj?sslmode=disable
-```
-
-## 3. 一次性 GCP Bootstrap
-
-### 3.1 啟用 API
-
-```bash
-gcloud services enable \
-  compute.googleapis.com \
-  sqladmin.googleapis.com \
-  dns.googleapis.com
-```
-
-### 3.2 建立 Cloud SQL（PostgreSQL）
-
-```bash
-gcloud sql instances create agentj-prod-sql \
-  --database-version=POSTGRES_16 \
-  --cpu=2 \
-  --memory=4GiB \
-  --region=<your-region>
-
-gcloud sql databases create agentj --instance=agentj-prod-sql
-gcloud sql users create agentj --instance=agentj-prod-sql --password="<strong-password>"
-```
-
-### 3.3 建立 VM Service Account 權限
-
-```bash
-gcloud iam service-accounts create agentj-prod-vm \
-  --display-name="Agentj Prod VM SA"
-
-for role in roles/cloudsql.client roles/dns.admin; do
-  gcloud projects add-iam-policy-binding <your-project-id> \
-    --member="serviceAccount:agentj-prod-vm@<your-project-id>.iam.gserviceaccount.com" \
-    --role="$role"
-done
-```
-
-### 3.4 建立 VM
-
-```bash
-gcloud compute instances create <vm-name> \
-  --zone=<your-zone> \
-  --machine-type=e2-standard-2 \
-  --image-family=ubuntu-2404-lts-amd64 \
-  --image-project=ubuntu-os-cloud \
-  --service-account="agentj-prod-vm@<your-project-id>.iam.gserviceaccount.com" \
-  --scopes=https://www.googleapis.com/auth/cloud-platform \
-  --tags=agentj-prod
-```
-
-開放 `80/443`：
-
-```bash
-gcloud compute firewall-rules create agentj-prod-ingress \
-  --allow=tcp:80,tcp:443 \
-  --direction=INGRESS \
-  --target-tags=agentj-prod \
-  --source-ranges=0.0.0.0/0
-```
-
-### 3.5 DNS 設定
-
-把下列 A record 指向 VM 外網 IP：
-- `APP_DOMAIN`
-- `GATEWAY_DOMAIN`
-- `*.TUNNEL_BASE_DOMAIN`
-
-## 4. VM 一鍵安裝（重點）
-
-在 VM 上執行：
+## 4. 一鍵部署
 
 ```bash
 git clone <your-repo-url> /opt/agentj
 cd /opt/agentj
 
 bash scripts/deploy/gce-onevm-install.sh \
-  --gcp-project-id "<your-project-id>" \
-  --instance-connection-name "<your-project-id>:<your-region>:agentj-prod-sql" \
-  --database-url "postgresql://agentj:<db-password>@cloud-sql-proxy:5432/agentj?sslmode=disable" \
   --app-domain "app.example.com" \
   --gateway-domain "gateway.example.com" \
   --tunnel-base-domain "tunnel.example.com" \
   --connect-token-secret "<at-least-16-chars>"
 ```
 
-這支 script 會做：
+Script 會自動：
 1. 安裝 Docker + Compose plugin（可用 `--skip-docker-install` 跳過）
-2. 產生 `infra/docker/.env.prod`
-3. build image（`infra/docker/docker-compose.onevm.yml`）
-4. 執行 migration
-5. 啟動 web/gateway/caddy/cloud-sql-proxy
+2. 產生 `infra/docker/.env.prod`（含自動生成的 DB 密碼）
+3. Build image
+4. 啟動 PostgreSQL 並執行 migration
+5. 啟動 web / gateway / caddy
 
 ## 5. 驗收
 
@@ -141,46 +73,40 @@ curl -fsS "https://<GATEWAY_DOMAIN>/healthz"
 
 ## 6. 更新與重部署
 
-在 VM 上更新程式後重跑同一支 script 即可：
-
 ```bash
 cd /opt/agentj
 git pull
 
 bash scripts/deploy/gce-onevm-install.sh \
-  --gcp-project-id "<your-project-id>" \
-  --instance-connection-name "<your-project-id>:<your-region>:agentj-prod-sql" \
-  --database-url "postgresql://agentj:<db-password>@cloud-sql-proxy:5432/agentj?sslmode=disable" \
   --app-domain "app.example.com" \
   --gateway-domain "gateway.example.com" \
   --tunnel-base-domain "tunnel.example.com" \
-  --connect-token-secret "<at-least-16-chars>" \
+  --connect-token-secret "<same-secret>" \
+  --db-password "<same-db-password>" \
   --skip-docker-install
 ```
+
+> 重部署時請傳入相同的 `--db-password`，否則會產生新密碼導致連線失敗。
+> 首次部署若省略密碼，script 會印出自動生成的密碼，請記錄下來。
 
 ## 7. 常見故障排查
 
 ```bash
 cd /opt/agentj
 docker compose --env-file infra/docker/.env.prod -f infra/docker/docker-compose.onevm.yml ps
-docker compose --env-file infra/docker/.env.prod -f infra/docker/docker-compose.onevm.yml logs cloud-sql-proxy --tail=200
+docker compose --env-file infra/docker/.env.prod -f infra/docker/docker-compose.onevm.yml logs postgres --tail=200
 docker compose --env-file infra/docker/.env.prod -f infra/docker/docker-compose.onevm.yml logs caddy --tail=200
 docker compose --env-file infra/docker/.env.prod -f infra/docker/docker-compose.onevm.yml logs gateway --tail=200
 docker compose --env-file infra/docker/.env.prod -f infra/docker/docker-compose.onevm.yml logs web --tail=200
 ```
 
 排查重點：
-- Cloud SQL 連線：`INSTANCE_CONNECTION_NAME`、VM SA 的 `roles/cloudsql.client`
-- Wildcard TLS：`GCP_PROJECT_ID`、VM SA 的 `roles/dns.admin`、DNS record 是否生效
-- Gateway WS：`AGENTJ_CONNECT_TOKEN_SECRET`（web/gateway 必須一致）、`GATEWAY_DOMAIN` 是否正確
+- DB 連線：確認 postgres container 健康、密碼正確
+- TLS 憑證：Caddy 用 HTTP-01 challenge，確保 port 80 對外開放且域名正確指向 VM IP
+- Gateway WS：`AGENTJ_CONNECT_TOKEN_SECRET` web/gateway 必須一致
 
-## 8. MVP 風險（已知）
+## 8. 注意事項
 
-目前 `/api/v1/pats*` 仍是 MVP 設計，沒有正式登入保護。  
-公開上網會有 PAT 被未授權建立/操作的風險。建議至少加網路層限制（公司 IP / VPN）。
-
-## 9. 參考
-
-- Cloud SQL Auth Proxy (PostgreSQL): <https://docs.cloud.google.com/sql/docs/postgres/connect-auth-proxy>
-- Caddy wildcard certificate patterns: <https://caddyserver.com/docs/caddyfile/patterns>
-- Caddy custom build with plugins: <https://caddyserver.com/docs/build>
+- 資料庫資料存在 Docker volume `postgres_data`，刪除 volume 會遺失資料
+- 目前 `/api/v1/pats*` 仍是 MVP 設計，沒有正式登入保護。建議至少加網路層限制（公司 IP / VPN）
+- Wildcard subdomain（`*.TUNNEL_BASE_DOMAIN`）的 TLS 使用 Caddy on-demand TLS，首次存取會有短暫延遲
