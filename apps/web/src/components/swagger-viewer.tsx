@@ -10,7 +10,7 @@ declare global {
 
 export function SwaggerViewer() {
   const containerRef = useRef<HTMLDivElement>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
