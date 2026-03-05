@@ -166,8 +166,6 @@ export function TunnelsPage() {
     };
   }, [filterPatId]);
 
-  const totalTunnels = groups.reduce((sum, g) => sum + g.tunnels.length, 0);
-
   return (
     <main className="mx-auto min-h-screen max-w-5xl px-4 pb-16 sm:px-6 lg:px-8">
       {/* Header */}
@@ -192,11 +190,21 @@ export function TunnelsPage() {
         </div>
         <div className="flex items-center gap-2">
           <ThemeToggle />
+          <Button variant="outline" size="icon-sm" asChild className="sm:hidden">
+            <Link href="/">
+              <KeyRound className="size-4" />
+            </Link>
+          </Button>
           <Button variant="outline" size="sm" asChild className="hidden sm:inline-flex">
             <Link href="/">
               <KeyRound className="size-4" />
               PATs
             </Link>
+          </Button>
+          <Button variant="outline" size="icon-sm" asChild className="sm:hidden">
+            <a href="/docs" target="_blank" rel="noopener noreferrer">
+              <ExternalLink className="size-4" />
+            </a>
           </Button>
           <Button variant="outline" size="sm" asChild className="hidden sm:inline-flex">
             <a href="/docs" target="_blank" rel="noopener noreferrer">
@@ -237,20 +245,56 @@ export function TunnelsPage() {
                 <Skeleton key={i} className="h-12 w-full rounded-md" />
               ))}
             </div>
-          ) : totalTunnels === 0 ? (
+          ) : groups.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              No tunnels found. Create one using the CLI.
+              No PATs found. Create one from the dashboard.
             </p>
           ) : (
-            groups
-              .filter((g) => g.tunnels.length > 0)
-              .map(({ pat, tunnels }) => (
-                <div key={pat.id} className="space-y-2">
-                  <div className="flex items-center gap-1 text-sm font-medium text-muted-foreground">
-                    PAT: <span className="font-mono">{pat.token ?? pat.prefix}</span>
-                    <CopyButton text={pat.token ?? pat.prefix} />
+            groups.map(({ pat, tunnels }) => (
+              <div key={pat.id} className="space-y-2">
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm font-medium text-muted-foreground">
+                  <span className="min-w-0 truncate font-mono">{pat.token ?? `${pat.prefix}...`}</span>
+                  <CopyButton text={pat.token ?? pat.prefix} />
+                  <Badge variant="secondary" className="text-xs">
+                    {pat.scopes.length} scope{pat.scopes.length !== 1 ? 's' : ''}
+                  </Badge>
+                  <span className="text-xs">
+                    Created {new Date(pat.createdAt).toLocaleDateString()}
+                  </span>
+                </div>
+                {tunnels.length === 0 ? (
+                  <div className="rounded-lg border px-4 py-3">
+                    <p className="text-sm text-muted-foreground">
+                      No tunnels for this PAT.
+                    </p>
                   </div>
-                  <div className="overflow-x-auto rounded-lg border bg-card">
+                ) : (
+                  <>
+                  {/* Mobile: stacked cards */}
+                  <div className="space-y-3 sm:hidden">
+                    {tunnels.map((tunnel) => (
+                      <div key={tunnel.id} className="rounded-lg border p-3 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <p className="font-semibold">{tunnel.subdomain}</p>
+                          <StatusBadge status={tunnel.status} />
+                        </div>
+                        <a
+                          href={tunnel.publicUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="block truncate rounded-md bg-agentj-code px-2 py-1 font-mono text-xs text-primary transition hover:underline"
+                        >
+                          {tunnel.publicUrl}
+                        </a>
+                        <p className="font-mono text-xs text-muted-foreground">
+                          {'→'} {tunnel.targetHost}:{tunnel.targetPort}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Desktop: table */}
+                  <div className="hidden sm:block overflow-x-auto rounded-lg border bg-card">
                     <Table>
                       <TableHeader>
                         <TableRow className="hover:bg-transparent">
@@ -293,8 +337,10 @@ export function TunnelsPage() {
                       </TableBody>
                     </Table>
                   </div>
-                </div>
-              ))
+                  </>
+                )}
+              </div>
+            ))
           )}
         </CardContent>
       </Card>

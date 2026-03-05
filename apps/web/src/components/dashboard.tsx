@@ -131,7 +131,8 @@ export function Dashboard() {
       {/* Header */}
       <header className="flex items-center justify-between py-5">
         <div className="flex items-center gap-3">
-          <img src="/logo.svg" alt="Agentj" className="h-10 w-10" />
+          <img src="/logo.svg" alt="Agentj" className="h-10 w-10 rounded-lg dark:hidden" />
+          <img src="/logo-dark.svg" alt="Agentj" className="hidden h-10 w-10 rounded-lg dark:block" />
           <div>
             <h1 className="text-xl font-bold leading-tight sm:text-2xl">Agentj</h1>
             <p className="text-xs text-muted-foreground sm:text-sm">Control Plane</p>
@@ -139,11 +140,21 @@ export function Dashboard() {
         </div>
         <div className="flex items-center gap-2">
           <ThemeToggle />
+          <Button variant="outline" size="icon-sm" asChild className="sm:hidden">
+            <Link href="/tunnels">
+              <Globe className="size-4" />
+            </Link>
+          </Button>
           <Button variant="outline" size="sm" asChild className="hidden sm:inline-flex">
             <Link href="/tunnels">
               <Globe className="size-4" />
               Tunnels
             </Link>
+          </Button>
+          <Button variant="outline" size="icon-sm" asChild className="sm:hidden">
+            <a href="/docs" target="_blank" rel="noopener noreferrer">
+              <ExternalLink className="size-4" />
+            </a>
           </Button>
           <Button variant="outline" size="sm" asChild className="hidden sm:inline-flex">
             <a href="/docs" target="_blank" rel="noopener noreferrer">
@@ -237,7 +248,7 @@ export function Dashboard() {
                 Creating...
               </>
             ) : (
-              'Create New PAT'
+              'New PAT'
             )}
           </Button>
         </CardContent>
