@@ -6,7 +6,7 @@ Agentj 是一個 pnpm monorepo，用來跑本地 tunneling 平台，包含 Web d
 
 - `apps/web`: Next.js dashboard + API routes
 - `apps/tunnel-gateway`: Fastify + WebSocket gateway（給 tunnel agents）
-- `packages/cli`: Oclif CLI（`aj`）
+- `packages/cli`: Oclif CLI（npm: `agentj-cli`）
 - `packages/contracts`: 共用 DB/Auth/API contracts
 - `packages/sdk`: CLI 使用的 client SDK
 - `infra/docker`: 本地 Docker Compose 與 DB-first 流程設定
@@ -49,20 +49,24 @@ PAT 請從 Web Dashboard 產生。
 4. 分別啟動服務：
 
 ```sh
-pnpm --filter @agentj/web dev
-pnpm --filter @agentj/tunnel-gateway dev
+pnpm dev:web
+pnpm dev:gateway
+# 或同時啟動
+pnpm dev:app
 ```
 
 5. CLI 快速驗證：
 
 ```sh
-pnpm --filter @agentj/cli build
-pnpm --filter @agentj/cli exec ./bin/run.js authtoken <從 Web 複製的 PAT>
-pnpm --filter @agentj/cli exec ./bin/run.js http 8080
+pnpm run build:cli
+pnpm run cli login          # 貼上從 Web 複製的 PAT
+pnpm run cli http 8080      # 開啟 tunnel
 ```
 
-Web Dashboard (`http://localhost:3000`) 的 **PATs** 區塊可查看/產生/撤銷 PAT。  
-`aj http` 會自動準備所需資源，不需要額外資源參數。
+`pnpm run cli` 會自動載入 `.env`（指向 localhost），與 production 環境隔離。
+
+Web Dashboard (`http://localhost:3000`) 的 **PATs** 區塊可查看/產生/撤銷 PAT。
+`http` 命令會自動建立 tunnel，不需要額外資源參數。
 本機直接跑 `web + gateway`（未經 Caddy）時，公開網址預設為 `http://<subdomain>.tunnel.localhost:4000`。
 
 ## OpenAPI / Swagger 更新
@@ -83,7 +87,7 @@ pnpm --filter @agentj/contracts build
 如果遇到 404，先用 CLI logs 判斷 404 來源：
 
 ```sh
-pnpm --filter @agentj/cli exec ./bin/run.js logs <tunnelId> --follow
+pnpm run cli logs <tunnelId> --follow
 ```
 
 - Gateway 回 `TUNNEL_NOT_FOUND`（或沒有看到請求）：
@@ -129,16 +133,64 @@ pnpm db:docker:up
 pnpm db:docker:bootstrap
 ```
 
+## CLI 發佈到 npm
+
+CLI 以 `agentj-cli` 發佈到 npm，使用 tsup 將 `@agentj/contracts` 和 `@agentj/sdk` 打包成單一 bundle。
+
+```sh
+cd packages/cli
+npm version patch          # 更新版本號（patch / minor / major）
+npm publish                # prepublishOnly 會自動跑 tsup
+```
+
+使用者安裝後可直接使用：
+
+```sh
+npx agentj-cli login
+npx agentj-cli http 8080
+```
+
+### Dev vs Production CLI
+
+| 模式       | 指令             | Config 路徑                | 連到            |
+| ---------- | ---------------- | -------------------------- | --------------- |
+| Dev        | `pnpm run cli`   | `~/.agentj/config-dev.yml` | localhost       |
+| Production | `npx agentj-cli` | `~/.agentj/config.yml`     | app.example.com |
+
+Dev 模式透過 `.env` 中的環境變數覆蓋預設值（API URL、gateway URL、config file path），與 production 完全隔離。
+
 ## 存取網址
 
-- Dashboard: `http://app.localhost`
-- Control API base: `http://app.localhost/api/v1`
-- Gateway WS endpoint: `ws://gateway:4000/agent/v1/connect`
+- Dashboard: `http://localhost:3000`
+- Control API base: `http://localhost:3000/api/v1`
+- Gateway WS endpoint: `ws://localhost:4000/agent/v1/connect`
+- Tunnel 公開網址: `http://<subdomain>.tunnel.localhost:4000`
 
 ## Production Deployment (GCP)
 
 - 完整流程與範本：[`docs/deployment-gcp-production.md`](docs/deployment-gcp-production.md)
 - MVP 一鍵安裝腳本：`bash scripts/deploy/gce-onevm-install.sh --help`
+
+### 重新部署
+
+```sh
+# 1. 本地 commit + push
+git add -A && git commit -m "your message"
+git push
+
+# 2. SSH 到 VM
+ssh <user>@<vm-ip>
+cd agentj
+git pull
+
+# 3. 重新 build + restart（跳過 Docker 安裝）
+bash scripts/deploy/gce-onevm-install.sh \
+  --app-domain app.example.com \
+  --gateway-domain gateway.example.com \
+  --tunnel-base-domain tunnel.example.com \
+  --connect-token-secret <your-secret> \
+  --skip-docker-install
+```
 
 ## 其他文件
 

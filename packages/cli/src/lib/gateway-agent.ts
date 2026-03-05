@@ -12,8 +12,8 @@ import type {
   PingMessage,
   PongMessage,
   StreamErrorMessage
-} from '@agentj/contracts';
-import { parseGatewayMessage, serializeGatewayMessage } from '@agentj/contracts';
+} from '@agentj/contracts/gateway';
+import { parseGatewayMessage, serializeGatewayMessage } from '@agentj/contracts/gateway';
 import WebSocket from 'ws';
 import type { RawData } from 'ws';
 

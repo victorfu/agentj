@@ -1,16 +1,32 @@
 {
   "name": "@agentj/contracts",
   "version": "0.1.0",
-  "private": true,
   "type": "module",
   "exports": {
     ".": {
       "types": "./dist/src/index.d.ts",
       "default": "./dist/src/index.js"
     },
+    "./gateway": {
+      "types": "./dist/src/gateway/messages.d.ts",
+      "default": "./dist/src/gateway/messages.js"
+    },
+    "./api/types": {
+      "types": "./dist/src/api/types.d.ts",
+      "default": "./dist/src/api/types.js"
+    },
+    "./otel": {
+      "types": "./dist/src/otel/trace.d.ts",
+      "default": "./dist/src/otel/trace.js"
+    },
     "./openapi.json": "./src/api/openapi.json",
     "./migrations/0001_initial.sql": "./src/db/migrations/0001_initial.sql"
   },
+  "files": [
+    "dist",
+    "src/api/openapi.json",
+    "src/db/migrations/*.sql"
+  ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "dev": "tsc -w -p tsconfig.json",

@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { createPool } from '../src/db/client.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+const packageRoot = resolve(__dirname, __dirname.includes('/dist/') ? '../..' : '..');
 
 async function main(): Promise<void> {
   const databaseUrl = process.env.DATABASE_URL;
@@ -13,7 +14,7 @@ async function main(): Promise<void> {
   }
 
   const pool = createPool(databaseUrl);
-  const sqlFile = resolve(__dirname, '../src/db/migrations/0001_initial.sql');
+  const sqlFile = resolve(packageRoot, 'src/db/migrations/0001_initial.sql');
   const sql = await readFile(sqlFile, 'utf8');
   const client = await pool.connect();
 

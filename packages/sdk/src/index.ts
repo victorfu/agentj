@@ -5,8 +5,8 @@ import type {
   PaginatedTunnelRequestLogs,
   Tunnel,
   TunnelRequestLogDetail
-} from '@agentj/contracts';
-import { TRACE_HEADER, buildTraceId } from '@agentj/contracts';
+} from '@agentj/contracts/api/types';
+import { TRACE_HEADER, buildTraceId } from '@agentj/contracts/otel';
 
 type HttpMethod = 'GET' | 'POST' | 'DELETE';
 

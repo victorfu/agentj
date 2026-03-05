@@ -132,7 +132,11 @@ export function Dashboard() {
       <header className="flex items-center justify-between py-5">
         <div className="flex items-center gap-3">
           <img src="/logo.svg" alt="Agentj" className="h-10 w-10 rounded-lg dark:hidden" />
-          <img src="/logo-dark.svg" alt="Agentj" className="hidden h-10 w-10 rounded-lg dark:block" />
+          <img
+            src="/logo-dark.svg"
+            alt="Agentj"
+            className="hidden h-10 w-10 rounded-lg dark:block"
+          />
           <div>
             <h1 className="text-xl font-bold leading-tight sm:text-2xl">Agentj</h1>
             <p className="text-xs text-muted-foreground sm:text-sm">Control Plane</p>

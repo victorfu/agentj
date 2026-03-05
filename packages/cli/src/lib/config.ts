@@ -9,12 +9,14 @@ export interface CliConfig {
 }
 
 export function resolveCliConfig(): CliConfig {
-  const appBaseUrl = process.env.AGENTJ_APP_BASE_URL ?? 'http://localhost:3000';
+  // process.env.AGENTJ_BUILTIN_* are replaced at publish-build time by tsup define.
+  // In dev (tsc build), they stay as runtime refs and resolve to undefined — env vars override.
+  const appBaseUrl = process.env.AGENTJ_APP_BASE_URL ?? process.env.AGENTJ_BUILTIN_APP_URL ?? '';
   const configFile = resolveConfigFilePath();
   return {
     apiBaseUrl: process.env.AGENTJ_API_BASE_URL ?? appBaseUrl,
     appBaseUrl,
-    gatewayUrl: process.env.AGENTJ_GATEWAY_URL ?? 'ws://localhost:4000/agent/v1/connect',
+    gatewayUrl: process.env.AGENTJ_GATEWAY_URL ?? process.env.AGENTJ_BUILTIN_GATEWAY_URL ?? '',
     configFile
   };
 }

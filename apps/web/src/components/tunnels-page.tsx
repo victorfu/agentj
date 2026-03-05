@@ -9,18 +9,8 @@ import { Check, Copy, ExternalLink, Globe, KeyRound } from 'lucide-react';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
@@ -29,7 +19,7 @@ import {
   TableCell,
   TableHead,
   TableHeader,
-  TableRow,
+  TableRow
 } from '@/components/ui/table';
 
 interface Tunnel {
@@ -57,7 +47,7 @@ const PAT_TUNNELS_REFRESH_INTERVAL_MS = 5000;
 const statusConfig = {
   online: { color: 'bg-agentj-online', text: 'text-agentj-online', label: 'Online' },
   offline: { color: 'bg-agentj-offline', text: 'text-muted-foreground', label: 'Offline' },
-  stopped: { color: 'bg-agentj-stopped', text: 'text-agentj-stopped', label: 'Stopped' },
+  stopped: { color: 'bg-agentj-stopped', text: 'text-agentj-stopped', label: 'Stopped' }
 } as const;
 
 function StatusBadge({ status }: { status: Tunnel['status'] }) {
@@ -140,7 +130,7 @@ export function TunnelsPage() {
             } catch {
               return { pat, tunnels: [] as Tunnel[] };
             }
-          }),
+          })
         );
 
         if (!isCurrent) return;
@@ -148,7 +138,7 @@ export function TunnelsPage() {
       } catch (error) {
         if (!isCurrent || silentError) return;
         toast.error('Failed to load tunnels', {
-          description: error instanceof Error ? error.message : 'Unknown error',
+          description: error instanceof Error ? error.message : 'Unknown error'
         });
       } finally {
         if (showLoading && isCurrent) setLoading(false);
@@ -171,18 +161,12 @@ export function TunnelsPage() {
       {/* Header */}
       <header className="flex items-center justify-between py-5">
         <div className="flex items-center gap-3">
-          <svg
-            width="36"
-            height="36"
-            viewBox="0 0 512 512"
-            role="img"
-            aria-label="Agentj"
-            className="shrink-0"
-          >
-            <rect width="512" height="512" rx="108" className="fill-primary" />
-            <path d="M136 408 V208 A120 120 0 0 1 376 208 V408 Z" fill="#080c16" />
-            <path d="M188 408 V208 A68 68 0 0 1 324 208 V408 Z" className="fill-primary" />
-          </svg>
+          <img src="/logo.svg" alt="Agentj" className="h-10 w-10 rounded-lg dark:hidden" />
+          <img
+            src="/logo-dark.svg"
+            alt="Agentj"
+            className="hidden h-10 w-10 rounded-lg dark:block"
+          />
           <div>
             <h1 className="text-xl font-bold leading-tight sm:text-2xl">Agentj</h1>
             <p className="text-xs text-muted-foreground sm:text-sm">Control Plane</p>
@@ -253,7 +237,9 @@ export function TunnelsPage() {
             groups.map(({ pat, tunnels }) => (
               <div key={pat.id} className="space-y-2">
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm font-medium text-muted-foreground">
-                  <span className="min-w-0 truncate font-mono">{pat.token ?? `${pat.prefix}...`}</span>
+                  <span className="min-w-0 truncate font-mono">
+                    {pat.token ?? `${pat.prefix}...`}
+                  </span>
                   <CopyButton text={pat.token ?? pat.prefix} />
                   <Badge variant="secondary" className="text-xs">
                     {pat.scopes.length} scope{pat.scopes.length !== 1 ? 's' : ''}
@@ -264,79 +250,77 @@ export function TunnelsPage() {
                 </div>
                 {tunnels.length === 0 ? (
                   <div className="rounded-lg border px-4 py-3">
-                    <p className="text-sm text-muted-foreground">
-                      No tunnels for this PAT.
-                    </p>
+                    <p className="text-sm text-muted-foreground">No tunnels for this PAT.</p>
                   </div>
                 ) : (
                   <>
-                  {/* Mobile: stacked cards */}
-                  <div className="space-y-3 sm:hidden">
-                    {tunnels.map((tunnel) => (
-                      <div key={tunnel.id} className="rounded-lg border p-3 space-y-2">
-                        <div className="flex items-center justify-between">
-                          <p className="font-semibold">{tunnel.subdomain}</p>
-                          <StatusBadge status={tunnel.status} />
+                    {/* Mobile: stacked cards */}
+                    <div className="space-y-3 sm:hidden">
+                      {tunnels.map((tunnel) => (
+                        <div key={tunnel.id} className="rounded-lg border p-3 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <p className="font-semibold">{tunnel.subdomain}</p>
+                            <StatusBadge status={tunnel.status} />
+                          </div>
+                          <a
+                            href={tunnel.publicUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="block truncate rounded-md bg-agentj-code px-2 py-1 font-mono text-xs text-primary transition hover:underline"
+                          >
+                            {tunnel.publicUrl}
+                          </a>
+                          <p className="font-mono text-xs text-muted-foreground">
+                            {'→'} {tunnel.targetHost}:{tunnel.targetPort}
+                          </p>
                         </div>
-                        <a
-                          href={tunnel.publicUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="block truncate rounded-md bg-agentj-code px-2 py-1 font-mono text-xs text-primary transition hover:underline"
-                        >
-                          {tunnel.publicUrl}
-                        </a>
-                        <p className="font-mono text-xs text-muted-foreground">
-                          {'→'} {tunnel.targetHost}:{tunnel.targetPort}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
+                      ))}
+                    </div>
 
-                  {/* Desktop: table */}
-                  <div className="hidden sm:block overflow-x-auto rounded-lg border bg-card">
-                    <Table>
-                      <TableHeader>
-                        <TableRow className="hover:bg-transparent">
-                          <TableHead>Name</TableHead>
-                          <TableHead>Status</TableHead>
-                          <TableHead>Public URL</TableHead>
-                          <TableHead className="text-right">Target</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {tunnels.map((tunnel) => (
-                          <TableRow key={tunnel.id} className="group">
-                            <TableCell>
-                              <div>
-                                <p className="font-semibold">{tunnel.subdomain}</p>
-                                <p className="font-mono text-[11px] text-muted-foreground/50">
-                                  {tunnel.id}
-                                </p>
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              <StatusBadge status={tunnel.status} />
-                            </TableCell>
-                            <TableCell>
-                              <a
-                                href={tunnel.publicUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center gap-1.5 rounded-md bg-agentj-code px-2 py-1 font-mono text-xs text-primary transition hover:underline"
-                              >
-                                {tunnel.publicUrl}
-                                <ExternalLink className="size-3 shrink-0 opacity-0 transition group-hover:opacity-100" />
-                              </a>
-                            </TableCell>
-                            <TableCell className="text-right font-mono text-xs text-muted-foreground">
-                              {tunnel.targetHost}:{tunnel.targetPort}
-                            </TableCell>
+                    {/* Desktop: table */}
+                    <div className="hidden sm:block overflow-x-auto rounded-lg border bg-card">
+                      <Table>
+                        <TableHeader>
+                          <TableRow className="hover:bg-transparent">
+                            <TableHead>Name</TableHead>
+                            <TableHead>Status</TableHead>
+                            <TableHead>Public URL</TableHead>
+                            <TableHead className="text-right">Target</TableHead>
                           </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
+                        </TableHeader>
+                        <TableBody>
+                          {tunnels.map((tunnel) => (
+                            <TableRow key={tunnel.id} className="group">
+                              <TableCell>
+                                <div>
+                                  <p className="font-semibold">{tunnel.subdomain}</p>
+                                  <p className="font-mono text-[11px] text-muted-foreground/50">
+                                    {tunnel.id}
+                                  </p>
+                                </div>
+                              </TableCell>
+                              <TableCell>
+                                <StatusBadge status={tunnel.status} />
+                              </TableCell>
+                              <TableCell>
+                                <a
+                                  href={tunnel.publicUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-1.5 rounded-md bg-agentj-code px-2 py-1 font-mono text-xs text-primary transition hover:underline"
+                                >
+                                  {tunnel.publicUrl}
+                                  <ExternalLink className="size-3 shrink-0 opacity-0 transition group-hover:opacity-100" />
+                                </a>
+                              </TableCell>
+                              <TableCell className="text-right font-mono text-xs text-muted-foreground">
+                                {tunnel.targetHost}:{tunnel.targetPort}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
                   </>
                 )}
               </div>
