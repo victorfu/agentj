@@ -2,6 +2,7 @@ FROM node:22-alpine AS builder
 
 WORKDIR /workspace
 
+ENV COREPACK_ENABLE_AUTO_PIN=0
 RUN corepack enable
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json tsconfig.json ./
@@ -17,6 +18,7 @@ FROM node:22-alpine AS runtime
 
 WORKDIR /workspace
 
+ENV COREPACK_ENABLE_AUTO_PIN=0
 RUN corepack enable \
   && addgroup -S agentj \
   && adduser -S -G agentj agentj

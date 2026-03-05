@@ -59,7 +59,7 @@ services:
         condition: service_healthy
     environment:
       DATABASE_URL: postgresql://agentj:${POSTGRES_PASSWORD}@postgres:5432/agentj
-    command: sh -lc "pnpm exec tsx packages/contracts/scripts/migrate.ts"
+    command: sh -lc "node packages/contracts/dist/scripts/migrate.js"
     restart: "no"
 
   caddy:
