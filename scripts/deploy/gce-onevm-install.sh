@@ -147,8 +147,8 @@ log "Writing ${ENV_FILE}"
   printf 'IMAGE_TAG=%s\n' "$IMAGE_TAG"
 } >"$ENV_FILE"
 
-log "Building images"
-"${DOCKER_CMD[@]}" compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" build
+log "Building image"
+"${DOCKER_CMD[@]}" compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" build web
 
 log "Running database migration"
 "${DOCKER_CMD[@]}" compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" run --rm migrate
