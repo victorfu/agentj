@@ -3,7 +3,16 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { toast } from 'sonner';
-import { Check, CircleAlert, Copy, ExternalLink, Globe, KeyRound, Loader2 } from 'lucide-react';
+import {
+  Check,
+  CircleAlert,
+  Copy,
+  ExternalLink,
+  Globe,
+  KeyRound,
+  Loader2,
+  Terminal
+} from 'lucide-react';
 
 import { ThemeToggle } from '@/components/theme-toggle';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -57,6 +66,51 @@ function CopyButton({ text }: { text: string }) {
       </TooltipTrigger>
       <TooltipContent>{copied ? 'Copied!' : 'Copy to clipboard'}</TooltipContent>
     </Tooltip>
+  );
+}
+
+function CodeBlock({ code, label }: { code: string; label?: string }) {
+  return (
+    <div className="space-y-1.5">
+      {label && <p className="text-xs font-medium text-muted-foreground">{label}</p>}
+      <div className="flex items-center gap-2 rounded-lg border bg-agentj-code p-3">
+        <pre className="flex-1 overflow-x-auto font-mono text-sm leading-relaxed">{code}</pre>
+        <CopyButton text={code} />
+      </div>
+    </div>
+  );
+}
+
+function StepCard({
+  step,
+  icon,
+  title,
+  description,
+  children
+}: {
+  step: number;
+  icon: React.ReactNode;
+  title: string;
+  description: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <Card
+      className="animate-fade-up bg-card/80 backdrop-blur-sm"
+      style={{ animationDelay: `${step * 60}ms` }}
+    >
+      <CardHeader>
+        <CardTitle className="flex items-center gap-3">
+          <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
+            {step}
+          </span>
+          {icon}
+          {title}
+        </CardTitle>
+        <CardDescription>{description}</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">{children}</CardContent>
+    </Card>
   );
 }
 
@@ -126,6 +180,10 @@ export function Dashboard() {
     }
   }
 
+  const authtokenCommand = newlyCreatedToken
+    ? `npx agentj-cli authtoken ${newlyCreatedToken}`
+    : 'npx agentj-cli authtoken <YOUR_PAT>';
+
   return (
     <main className="mx-auto min-h-screen max-w-5xl px-4 pb-16 sm:px-6 lg:px-8">
       {/* Header */}
@@ -171,19 +229,22 @@ export function Dashboard() {
 
       <Separator />
 
-      {/* PATs */}
-      <Card
-        className="mt-6 animate-fade-up bg-card/80 backdrop-blur-sm"
-        style={{ animationDelay: '60ms' }}
-      >
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <KeyRound className="size-5 text-primary" />
-            PATs
-          </CardTitle>
-          <CardDescription>Manage your Personal Access Tokens.</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
+      {/* Quick Start */}
+      <div className="mt-8 space-y-1">
+        <h2 className="text-2xl font-bold tracking-tight">Quick Start</h2>
+        <p className="text-sm text-muted-foreground">
+          Three steps to expose your local server to the internet.
+        </p>
+      </div>
+
+      <div className="mt-6 space-y-6">
+        {/* Step 1: Create PAT */}
+        <StepCard
+          step={1}
+          icon={<KeyRound className="size-5 text-primary" />}
+          title="Create a Personal Access Token"
+          description="Click below to generate a PAT for CLI authentication."
+        >
           {newlyCreatedToken && (
             <Alert>
               <CircleAlert className="size-4" />
@@ -195,13 +256,61 @@ export function Dashboard() {
                   </pre>
                   <CopyButton text={newlyCreatedToken} />
                 </div>
+                <p className="text-xs text-muted-foreground">
+                  Copy this token now -- you won&apos;t be able to see it again.
+                </p>
                 <Button variant="ghost" size="sm" onClick={() => setNewlyCreatedToken(null)}>
                   Dismiss
                 </Button>
               </AlertDescription>
             </Alert>
           )}
+          <Button onClick={() => void createPat()} disabled={creatingPat}>
+            {creatingPat ? (
+              <>
+                <Loader2 className="animate-spin" />
+                Creating...
+              </>
+            ) : (
+              'New PAT'
+            )}
+          </Button>
+        </StepCard>
 
+        {/* Step 2: Set token */}
+        <StepCard
+          step={2}
+          icon={<Terminal className="size-5 text-primary" />}
+          title="Set your token"
+          description="Store the PAT locally so the CLI can authenticate."
+        >
+          <CodeBlock code={authtokenCommand} />
+        </StepCard>
+
+        {/* Step 3: Start tunnel */}
+        <StepCard
+          step={3}
+          icon={<Globe className="size-5 text-primary" />}
+          title="Start a tunnel"
+          description="Expose your local server with a public URL."
+        >
+          <CodeBlock code="npx agentj-cli http 8080" />
+        </StepCard>
+      </div>
+
+      {/* Manage PATs */}
+      <Card
+        className="mt-10 animate-fade-up bg-card/80 backdrop-blur-sm"
+        style={{ animationDelay: '300ms' }}
+      >
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <KeyRound className="size-5 text-primary" />
+            Manage PATs
+          </CardTitle>
+          <CardDescription>View and revoke your existing Personal Access Tokens.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
           {loadingPats ? (
             <div className="space-y-3">
               {[1, 2, 3].map((i) => (
@@ -210,7 +319,7 @@ export function Dashboard() {
             </div>
           ) : pats.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              No active PATs yet. Create one to start.
+              No active PATs yet. Create one above to get started.
             </p>
           ) : (
             <div className="space-y-2">
@@ -244,17 +353,6 @@ export function Dashboard() {
               ))}
             </div>
           )}
-
-          <Button onClick={() => void createPat()} disabled={creatingPat}>
-            {creatingPat ? (
-              <>
-                <Loader2 className="animate-spin" />
-                Creating...
-              </>
-            ) : (
-              'New PAT'
-            )}
-          </Button>
         </CardContent>
       </Card>
     </main>
