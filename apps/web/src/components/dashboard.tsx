@@ -123,12 +123,33 @@ export function Dashboard() {
 
   useEffect(() => {
     setLoadingPats(true);
-    void fetch('/api/v1/pats')
+    void fetch('/api/v1/auth/session')
       .then(async (res) => {
+        if (res.status === 401) {
+          window.location.href = '/login';
+          return null;
+        }
+        if (!res.ok) throw new Error(await res.text());
+        return res.json();
+      })
+      .then((session) => {
+        if (!session) {
+          return null;
+        }
+        return fetch('/api/v1/pats');
+      })
+      .then(async (res) => {
+        if (!res) {
+          return;
+        }
         if (!res.ok) throw new Error(await res.text());
         return res.json() as Promise<PatToken[]>;
       })
-      .then(setPats)
+      .then((result) => {
+        if (result) {
+          setPats(result);
+        }
+      })
       .catch((err: Error) => {
         toast.error('Failed to load PATs', { description: err.message });
       })
@@ -141,6 +162,10 @@ export function Dashboard() {
       const response = await fetch('/api/v1/pats', {
         method: 'POST'
       });
+      if (response.status === 401) {
+        window.location.href = '/login';
+        return;
+      }
       if (!response.ok) throw new Error(await response.text());
 
       const created = (await response.json()) as CreatedPatResponse;
@@ -170,6 +195,10 @@ export function Dashboard() {
       const response = await fetch(`/api/v1/pats/${patId}`, {
         method: 'DELETE'
       });
+      if (response.status === 401) {
+        window.location.href = '/login';
+        return;
+      }
       if (!response.ok) throw new Error(await response.text());
       setPats((prev) => prev.filter((p) => p.id !== patId));
       toast.success('PAT revoked');

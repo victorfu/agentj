@@ -6,7 +6,7 @@ import { NextResponse } from 'next/server';
 
 import { auditLogs, tunnels } from '@agentj/contracts';
 
-import { requireAuth } from '@/lib/auth';
+import { requirePatAuth } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { jsonError } from '@/lib/http';
 import { findAccessibleTunnel } from '@/lib/tunnel-access';
@@ -17,13 +17,13 @@ export async function DELETE(
   request: NextRequest,
   context: { params: Promise<{ tunnelId: string }> }
 ) {
-  const auth = await requireAuth(request);
+  const auth = await requirePatAuth(request);
   if (!auth) {
     return jsonError('UNAUTHORIZED', 'Invalid PAT token', 401);
   }
 
   const { tunnelId } = await context.params;
-  const tunnel = await findAccessibleTunnel(auth.userId, tunnelId, auth.patTokenId);
+  const tunnel = await findAccessibleTunnel(auth.workspaceId, tunnelId, auth.patTokenId);
   if (!tunnel) {
     return jsonError('NOT_FOUND', 'Tunnel not found', 404);
   }

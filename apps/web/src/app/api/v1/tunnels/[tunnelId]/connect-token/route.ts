@@ -2,7 +2,7 @@ import { type NextRequest } from 'next/server';
 
 import { createConnectToken } from '@agentj/contracts';
 
-import { requireAuth } from '@/lib/auth';
+import { requirePatAuth } from '@/lib/auth';
 import { getWebEnv } from '@/lib/env';
 import { jsonError, jsonNoStore } from '@/lib/http';
 import { findAccessibleTunnel } from '@/lib/tunnel-access';
@@ -13,13 +13,13 @@ export async function POST(
   request: NextRequest,
   context: { params: Promise<{ tunnelId: string }> }
 ) {
-  const auth = await requireAuth(request);
+  const auth = await requirePatAuth(request);
   if (!auth) {
     return jsonError('UNAUTHORIZED', 'Invalid PAT token', 401);
   }
 
   const { tunnelId } = await context.params;
-  const tunnel = await findAccessibleTunnel(auth.userId, tunnelId, auth.patTokenId);
+  const tunnel = await findAccessibleTunnel(auth.workspaceId, tunnelId, auth.patTokenId);
   if (!tunnel) {
     return jsonError('NOT_FOUND', 'Tunnel not found', 404);
   }

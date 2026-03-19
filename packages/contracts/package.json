@@ -20,7 +20,8 @@
       "default": "./dist/src/otel/trace.js"
     },
     "./openapi.json": "./src/api/openapi.json",
-    "./migrations/0001_initial.sql": "./src/db/migrations/0001_initial.sql"
+    "./migrations/0001_initial.sql": "./src/db/migrations/0001_initial.sql",
+    "./migrations/0002_auth_workspace_line.sql": "./src/db/migrations/0002_auth_workspace_line.sql"
   },
   "files": [
     "dist",

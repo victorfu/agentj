@@ -52,26 +52,33 @@ async function withDerivedStatuses(rows: TunnelRow[]): Promise<TunnelRow[]> {
 }
 
 export async function listAccessibleTunnels(
-  userId: string,
-  patTokenId: string
+  workspaceId: string,
+  patTokenId?: string
 ): Promise<TunnelRow[]> {
-  const rows = await db
-    .select()
-    .from(tunnels)
-    .where(and(eq(tunnels.createdBy, userId), eq(tunnels.patTokenId, patTokenId)))
-    .orderBy(desc(tunnels.createdAt));
+  const conditions = [eq(tunnels.workspaceId, workspaceId)];
+  if (patTokenId) {
+    conditions.push(eq(tunnels.patTokenId, patTokenId));
+  }
+
+  const whereClause = and(...conditions);
+  const rows = await db.select().from(tunnels).where(whereClause).orderBy(desc(tunnels.createdAt));
 
   return withDerivedStatuses(rows);
 }
 
 export async function findAccessibleTunnel(
-  userId: string,
+  workspaceId: string,
   tunnelId: string,
-  patTokenId: string
+  patTokenId?: string
 ): Promise<typeof tunnels.$inferSelect | null> {
+  const conditions = [eq(tunnels.id, tunnelId), eq(tunnels.workspaceId, workspaceId)];
+  if (patTokenId) {
+    conditions.push(eq(tunnels.patTokenId, patTokenId));
+  }
+
   return (
     (await db.query.tunnels.findFirst({
-      where: and(eq(tunnels.id, tunnelId), eq(tunnels.createdBy, userId), eq(tunnels.patTokenId, patTokenId))
+      where: and(...conditions)
     })) ?? null
   );
 }

@@ -112,6 +112,15 @@ export function TunnelsPage() {
       if (showLoading) setLoading(true);
 
       try {
+        const sessionRes = await fetch('/api/v1/auth/session');
+        if (sessionRes.status === 401) {
+          window.location.href = '/login';
+          return;
+        }
+        if (!sessionRes.ok) {
+          throw new Error(await sessionRes.text());
+        }
+
         const patsRes = await fetch('/api/v1/pats');
         if (!patsRes.ok) throw new Error(await patsRes.text());
         let pats = (await patsRes.json()) as PatToken[];

@@ -1,13 +1,17 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
 import { Buffer } from 'node:buffer';
 
 import websocketPlugin from '@fastify/websocket';
 import {
+  and,
   asc,
   desc,
   eq,
   inArray,
+  isNull,
   lt,
+  lte,
+  or,
   sql
 } from 'drizzle-orm';
 import Fastify, { type FastifyReply, type FastifyRequest } from 'fastify';
@@ -24,6 +28,8 @@ import {
   verifyConnectToken,
   ingressRequests,
   ingressPayloadChunks,
+  lineChannels,
+  lineWebhookEvents,
   TRACE_HEADER,
   buildTraceId,
   type AgentResponseChunkMessage,
@@ -98,6 +104,8 @@ interface StreamState {
   responseTruncated: boolean;
   startedAtMs: number;
   protocol: 'http' | 'ws';
+  managedWebhookEventId?: string;
+  upstreamStatusCode?: number | null;
   timeoutHandle?: NodeJS.Timeout;
 }
 
@@ -107,6 +115,7 @@ const streamsBySession = new Map<string, Set<string>>();
 const activeStreamsByTunnel = new Map<string, number>();
 const pendingOfflineTimersByTunnel = new Map<string, NodeJS.Timeout>();
 let activeStreamsGlobal = 0;
+let isProcessingLineWebhookEvents = false;
 
 const REDACT_HEADERS = new Set([
   'authorization',
@@ -119,11 +128,116 @@ const REDACT_HEADERS = new Set([
 const REQUEST_LOG_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 const CLEANUP_BATCH_SIZE = 1000;
 const WS_CLOSE_CODE_TUNNEL_BUSY = 4429;
+const LINE_WEBHOOK_PATH = '/line/webhook';
+const LINE_WEBHOOK_PROCESS_BATCH_SIZE = 20;
+
+const LINE_WEBHOOK_MAX_RETRIES = 5;
+const LINE_WEBHOOK_RETRY_BASE_MS = 1000;
+const LINE_WEBHOOK_RETRY_MAX_MS = 30000;
+const LINE_WEBHOOK_DISPATCH_LEASE_MS = env.AGENTJ_STREAM_TIMEOUT_MS + 5000;
+const LINE_WEBHOOK_MAX_BODY_BYTES = env.AGENTJ_REQUEST_BODY_LIMIT_BYTES;
 
 function runSafely(promise: Promise<unknown>, context: string): void {
   promise.catch((error: unknown) => {
     app.log.error({ context, error }, 'async task failed');
   });
+}
+
+function splitPathAndQuery(url: string): { path: string; query: string } {
+  if (!url.includes('?')) {
+    return { path: url, query: '' };
+  }
+
+  const [path, query] = url.split('?');
+  return {
+    path: path ?? '/',
+    query: query ?? ''
+  };
+}
+
+function normalizeLineSignatureHeader(value: string | string[] | undefined): string | null {
+  if (typeof value === 'string') {
+    return value.trim();
+  }
+  if (Array.isArray(value)) {
+    return (value[0] ?? '').trim() || null;
+  }
+  return null;
+}
+
+function createLineWebhookSignature(payload: Buffer, channelSecret: string): string {
+  return createHmac('sha256', channelSecret).update(payload).digest('base64');
+}
+
+function verifyLineWebhookSignature(payload: Buffer, signature: string, channelSecret: string): boolean {
+  const digest = createLineWebhookSignature(payload, channelSecret);
+  const received = Buffer.from(signature, 'utf8');
+  const expected = Buffer.from(digest, 'utf8');
+  if (received.length !== expected.length) {
+    return false;
+  }
+  return timingSafeEqual(received, expected);
+}
+
+function calculateLineWebhookNextRetry(attempts: number): Date {
+  const exponential = Math.min(LINE_WEBHOOK_RETRY_MAX_MS, LINE_WEBHOOK_RETRY_BASE_MS * 2 ** attempts);
+  return new Date(Date.now() + exponential);
+}
+
+function deriveLineWebhookDedupId(payloadText: string): string {
+  try {
+    const parsed = JSON.parse(payloadText) as {
+      events?: Array<{ webhookEventId?: unknown }>;
+    };
+    if (Array.isArray(parsed.events) && parsed.events.length === 1) {
+      const id = parsed.events[0]?.webhookEventId;
+      if (typeof id === 'string' && id.trim()) {
+        return id.trim();
+      }
+    }
+  } catch {
+    // Fall through to payload hash dedup key.
+  }
+
+  const digest = createHash('sha256').update(payloadText).digest('hex');
+  return `payload:${digest}`;
+}
+
+async function findLineChannelByTunnel(tunnelId: string) {
+  return (
+    (await db.query.lineChannels.findFirst({
+      where: eq(lineChannels.tunnelId, tunnelId)
+    })) ?? null
+  );
+}
+
+async function enqueueLineWebhookEvents(
+  lineChannelId: string,
+  tunnelId: string,
+  requestHeaders: Record<string, string | string[]>,
+  payloadText: string
+): Promise<number> {
+  try {
+    await db.insert(lineWebhookEvents).values({
+      id: `lwe_${randomUUID()}`,
+      lineChannelId,
+      tunnelId,
+      webhookEventId: deriveLineWebhookDedupId(payloadText),
+      status: 'pending',
+      attempts: 0,
+      requestHeaders,
+      payloadText
+    });
+    return 1;
+  } catch (error) {
+    const code = (error as { code?: string })?.code;
+    if (code === '23505') {
+      // Duplicate webhook event id. Ignore as idempotent insert.
+      return 0;
+    }
+
+    throw error;
+  }
 }
 
 function createSocketSendQueue(socket: WebSocket): WebSocketSendQueue {
@@ -135,6 +249,132 @@ function createSocketSendQueue(socket: WebSocket): WebSocketSendQueue {
 
 async function sendToAgent(agent: AgentConnection, message: GatewayMessage): Promise<void> {
   await agent.sendQueue.send(serializeGatewayMessage(message));
+}
+
+interface BufferedHttpIngressOptions {
+  tunnelId: string;
+  host: string;
+  method: string;
+  path: string;
+  query: string;
+  headers: Record<string, string | string[]>;
+  rawBody: Buffer;
+  contentType: string | null;
+  agent: AgentConnection;
+  reply?: FastifyReply;
+  managedWebhookEventId?: string;
+}
+
+async function startBufferedHttpIngress(options: BufferedHttpIngressOptions): Promise<string | null> {
+  if (!reserveStreamCapacity(options.tunnelId)) {
+    if (options.reply) {
+      options.reply.code(503).send({
+        error: {
+          code: 'TUNNEL_BUSY',
+          message: 'Tunnel is busy'
+        }
+      });
+    }
+    return null;
+  }
+
+  const streamId = `str_${randomUUID()}`;
+  const requestId = `req_${randomUUID()}`;
+
+  const state: StreamState = {
+    streamId,
+    tunnelId: options.tunnelId,
+    agentSessionId: options.agent.sessionId,
+    requestId,
+    reply: options.reply,
+    requestBytes: 0,
+    responseBytes: 0,
+    requestChunkIndex: 0,
+    responseChunkIndex: 0,
+    requestTruncated: false,
+    responseTruncated: false,
+    startedAtMs: Date.now(),
+    protocol: 'http',
+    managedWebhookEventId: options.managedWebhookEventId,
+    upstreamStatusCode: null
+  };
+
+  streams.set(streamId, state);
+  trackStreamBySession(state);
+  armStreamTimeout(state);
+
+  try {
+    await db.insert(ingressRequests).values({
+      id: requestId,
+      tunnelId: options.tunnelId,
+      streamId,
+      method: options.method,
+      host: options.host,
+      path: options.path,
+      query: options.query,
+      requestHeaders: redactHeaders(options.headers),
+      responseHeaders: {}
+    });
+  } catch (error) {
+    await failStream(streamId, 502, 'INGRESS_PERSIST_FAILED', (error as Error).message);
+    return null;
+  }
+
+  const startMessage: IngressRequestStartMessage = {
+    type: 'ingress_request_start',
+    streamId,
+    protocol: 'http',
+    method: options.method,
+    path: options.path,
+    query: options.query,
+    headers: normalizeHeaders(options.headers)
+  };
+
+  try {
+    await sendToAgent(options.agent, startMessage);
+  } catch (error) {
+    await failStream(streamId, 502, 'AGENT_SEND_FAILED', (error as Error).message);
+    return null;
+  }
+
+  if (options.rawBody.length > 0) {
+    const chunkMessage: IngressRequestChunkMessage = {
+      type: 'ingress_request_chunk',
+      streamId,
+      chunkIndex: state.requestChunkIndex,
+      isBinary: true,
+      dataBase64: options.rawBody.toString('base64')
+    };
+    state.requestChunkIndex += 1;
+    try {
+      await sendToAgent(options.agent, chunkMessage);
+    } catch (error) {
+      await failStream(streamId, 502, 'AGENT_SEND_FAILED', (error as Error).message);
+      return null;
+    }
+
+    await persistChunk(
+      state,
+      'request',
+      chunkMessage.chunkIndex,
+      options.rawBody,
+      true,
+      options.contentType
+    );
+  }
+
+  const endMessage: IngressRequestEndMessage = {
+    type: 'ingress_request_end',
+    streamId
+  };
+  try {
+    await sendToAgent(options.agent, endMessage);
+  } catch (error) {
+    await failStream(streamId, 502, 'AGENT_SEND_FAILED', (error as Error).message);
+    return null;
+  }
+
+  return streamId;
 }
 
 function armStreamTimeout(state: StreamState): void {
@@ -289,6 +529,10 @@ setInterval(() => {
   runSafely(cleanupOldRequestLogs(), 'cleanup_old_request_logs');
 }, 24 * 60 * 60 * 1000).unref();
 
+setInterval(() => {
+  runSafely(processPendingLineWebhookEvents(), 'process_pending_line_webhook_events');
+}, 2000).unref();
+
 app.get('/healthz', async () => {
   await db.execute(sql`select 1`);
   return { ok: true };
@@ -313,6 +557,68 @@ async function handleHttpIngress(request: FastifyRequest, reply: FastifyReply): 
     return;
   }
 
+  const { path, query } = splitPathAndQuery(request.url);
+  const normalizedHeaders = normalizeHeaders(request.headers);
+  const lineChannel = path === LINE_WEBHOOK_PATH ? await findLineChannelByTunnel(tunnel.id) : null;
+  let lineWebhookBody: Buffer | null = null;
+
+  if (lineChannel) {
+    const chunks: Buffer[] = [];
+    let totalBytes = 0;
+    for await (const chunk of request.raw) {
+      const chunkBuffer = Buffer.from(chunk as Buffer);
+      totalBytes += chunkBuffer.byteLength;
+      if (totalBytes > LINE_WEBHOOK_MAX_BODY_BYTES) {
+        reply.code(413).send({
+          error: {
+            code: 'REQUEST_BODY_TOO_LARGE',
+            message: `LINE webhook payload exceeds ${LINE_WEBHOOK_MAX_BODY_BYTES} bytes`
+          }
+        });
+        return;
+      }
+      chunks.push(chunkBuffer);
+    }
+    lineWebhookBody = Buffer.concat(chunks);
+
+    const signature = normalizeLineSignatureHeader(request.headers['x-line-signature']);
+    if (!signature || !verifyLineWebhookSignature(lineWebhookBody, signature, lineChannel.channelSecret)) {
+      reply.code(401).send({
+        error: {
+          code: 'LINE_SIGNATURE_INVALID',
+          message: 'Invalid LINE webhook signature'
+        }
+      });
+      return;
+    }
+
+    if (lineChannel.mode === 'managed') {
+      try {
+        const inserted = await enqueueLineWebhookEvents(
+          lineChannel.id,
+          tunnel.id,
+          normalizedHeaders,
+          lineWebhookBody.toString('utf8')
+        );
+
+        reply.code(200).send({
+          ok: true,
+          mode: 'managed',
+          queuedEvents: inserted
+        });
+      } catch (error) {
+        app.log.error({ error, tunnelId: tunnel.id }, 'failed to enqueue managed LINE webhook event');
+        reply.code(500).send({
+          error: {
+            code: 'LINE_WEBHOOK_QUEUE_FAILED',
+            message: 'Failed to queue LINE webhook event'
+          }
+        });
+      }
+      return;
+    }
+  }
+
   const agent = agentsByTunnel.get(tunnel.id);
   if (!agent) {
     if (isTunnelReconnecting(tunnel.id)) {
@@ -330,6 +636,31 @@ async function handleHttpIngress(request: FastifyRequest, reply: FastifyReply): 
         code: 'TUNNEL_OFFLINE',
         message: 'Tunnel is offline'
       }
+    });
+    return;
+  }
+
+  if (lineChannel && lineWebhookBody) {
+    const streamId = await startBufferedHttpIngress({
+      tunnelId: tunnel.id,
+      host: hostContext.parsedHost,
+      method: request.method,
+      path,
+      query,
+      headers: normalizedHeaders,
+      rawBody: lineWebhookBody,
+      contentType: request.headers['content-type']?.toString() ?? null,
+      agent,
+      reply
+    });
+
+    if (!streamId) {
+      return;
+    }
+
+    await new Promise<void>((resolve) => {
+      reply.raw.once('close', () => resolve());
+      reply.raw.once('finish', () => resolve());
     });
     return;
   }
@@ -374,8 +705,8 @@ async function handleHttpIngress(request: FastifyRequest, reply: FastifyReply): 
       streamId,
       method: request.method,
       host: hostContext.parsedHost,
-      path: request.url.split('?')[0] ?? '/',
-      query: request.url.includes('?') ? request.url.split('?')[1] ?? '' : '',
+      path,
+      query,
       requestHeaders: redactHeaders(request.headers),
       responseHeaders: {}
     });
@@ -389,9 +720,9 @@ async function handleHttpIngress(request: FastifyRequest, reply: FastifyReply): 
     streamId,
     protocol: 'http',
     method: request.method,
-    path: request.url.split('?')[0] ?? '/',
-    query: request.url.includes('?') ? (request.url.split('?')[1] ?? '') : '',
-    headers: normalizeHeaders(request.headers)
+    path,
+    query,
+    headers: normalizedHeaders
   };
 
   try {
@@ -861,6 +1192,7 @@ async function onAgentResponseStart(
   if (state.protocol === 'http' && state.reply && !state.reply.raw.headersSent) {
     state.reply.raw.writeHead(message.statusCode, toOutgoingHttpHeaders(message.headers));
   }
+  state.upstreamStatusCode = message.statusCode;
 
   await db
     .update(ingressRequests)
@@ -972,12 +1304,13 @@ async function finalizeStream(
 
   const endedAt = new Date();
   const latencyMs = endedAt.getTime() - state.startedAtMs;
+  const finalStatusCode = statusCode ?? state.upstreamStatusCode ?? null;
 
   try {
     await db
       .update(ingressRequests)
       .set({
-        statusCode: statusCode ?? undefined,
+        statusCode: finalStatusCode ?? undefined,
         latencyMs,
         endedAt
       })
@@ -988,6 +1321,36 @@ async function finalizeStream(
 
   if (errorMessage) {
     app.log.warn({ streamId, errorMessage }, 'stream error');
+  }
+
+  if (state.managedWebhookEventId) {
+    try {
+      const delivered =
+        errorMessage === null &&
+        finalStatusCode !== null &&
+        finalStatusCode >= 200 &&
+        finalStatusCode < 300;
+
+      if (delivered) {
+        await markLineWebhookEventDelivered(state.managedWebhookEventId);
+      } else {
+        const reason =
+          errorMessage ??
+          (finalStatusCode === null
+            ? 'missing upstream response status'
+            : `upstream responded with status ${finalStatusCode}`);
+        await markLineWebhookEventRetryById(state.managedWebhookEventId, reason);
+      }
+    } catch (error) {
+      app.log.warn(
+        {
+          streamId,
+          managedWebhookEventId: state.managedWebhookEventId,
+          error
+        },
+        'failed to update managed LINE webhook event status'
+      );
+    }
   }
 
   untrackStreamBySession(state);
@@ -1058,6 +1421,143 @@ async function persistChunk(
     dataBase64: isBinary ? chunk.toString('base64') : null,
     truncated: false
   });
+}
+
+async function markLineWebhookEventRetry(
+  event: typeof lineWebhookEvents.$inferSelect,
+  reason: string
+): Promise<void> {
+  const nextAttempts = event.attempts + 1;
+  const reachedMax = nextAttempts >= LINE_WEBHOOK_MAX_RETRIES;
+  await db
+    .update(lineWebhookEvents)
+    .set({
+      status: reachedMax ? 'failed' : 'pending',
+      attempts: nextAttempts,
+      nextRetryAt: reachedMax ? null : calculateLineWebhookNextRetry(nextAttempts),
+      lastError: reason
+    })
+    .where(eq(lineWebhookEvents.id, event.id));
+}
+
+async function markLineWebhookEventRetryById(eventId: string, reason: string): Promise<void> {
+  const event = await db.query.lineWebhookEvents.findFirst({
+    where: eq(lineWebhookEvents.id, eventId)
+  });
+  if (!event || event.status !== 'pending') {
+    return;
+  }
+
+  await markLineWebhookEventRetry(event, reason);
+}
+
+async function claimLineWebhookEventForDispatch(eventId: string): Promise<boolean> {
+  const now = new Date();
+  const leaseUntil = new Date(now.getTime() + LINE_WEBHOOK_DISPATCH_LEASE_MS);
+
+  const claimed = await db
+    .update(lineWebhookEvents)
+    .set({
+      nextRetryAt: leaseUntil
+    })
+    .where(
+      and(
+        eq(lineWebhookEvents.id, eventId),
+        eq(lineWebhookEvents.status, 'pending'),
+        or(isNull(lineWebhookEvents.nextRetryAt), lte(lineWebhookEvents.nextRetryAt, now))
+      )
+    )
+    .returning({ id: lineWebhookEvents.id });
+
+  return claimed.length > 0;
+}
+
+async function markLineWebhookEventDelivered(eventId: string): Promise<void> {
+  await db
+    .update(lineWebhookEvents)
+    .set({
+      status: 'delivered',
+      deliveredAt: new Date(),
+      nextRetryAt: null,
+      lastError: null
+    })
+    .where(eq(lineWebhookEvents.id, eventId));
+}
+
+async function processPendingLineWebhookEvents(): Promise<void> {
+  if (isProcessingLineWebhookEvents) {
+    return;
+  }
+  isProcessingLineWebhookEvents = true;
+
+  try {
+    const now = new Date();
+    const pending = await db
+      .select()
+      .from(lineWebhookEvents)
+      .where(
+        and(
+          eq(lineWebhookEvents.status, 'pending'),
+          or(isNull(lineWebhookEvents.nextRetryAt), lte(lineWebhookEvents.nextRetryAt, now))
+        )
+      )
+      .orderBy(asc(lineWebhookEvents.createdAt))
+      .limit(LINE_WEBHOOK_PROCESS_BATCH_SIZE);
+
+    for (const event of pending) {
+      await processSingleLineWebhookEvent(event);
+    }
+  } finally {
+    isProcessingLineWebhookEvents = false;
+  }
+}
+
+async function processSingleLineWebhookEvent(event: typeof lineWebhookEvents.$inferSelect): Promise<void> {
+  const claimed = await claimLineWebhookEventForDispatch(event.id);
+  if (!claimed) {
+    return;
+  }
+
+  const [channel, tunnel] = await Promise.all([
+    db.query.lineChannels.findFirst({ where: eq(lineChannels.id, event.lineChannelId) }),
+    db.query.tunnels.findFirst({ where: eq(tunnels.id, event.tunnelId) })
+  ]);
+
+  if (!channel || !tunnel) {
+    await db
+      .update(lineWebhookEvents)
+      .set({
+        status: 'failed',
+        attempts: event.attempts + 1,
+        lastError: 'line channel or tunnel not found'
+      })
+      .where(eq(lineWebhookEvents.id, event.id));
+    return;
+  }
+
+  const agent = agentsByTunnel.get(event.tunnelId);
+  if (!agent) {
+    await markLineWebhookEventRetry(event, 'agent offline');
+    return;
+  }
+
+  const streamId = await startBufferedHttpIngress({
+    tunnelId: tunnel.id,
+    host: `${tunnel.subdomain}.${env.AGENTJ_TUNNEL_BASE_DOMAIN}`,
+    method: 'POST',
+    path: channel.webhookPath,
+    query: '',
+    headers: event.requestHeaders,
+    rawBody: Buffer.from(event.payloadText, 'utf8'),
+    contentType: 'application/json',
+    agent,
+    managedWebhookEventId: event.id
+  });
+
+  if (!streamId) {
+    await markLineWebhookEventRetry(event, 'failed to start managed webhook stream');
+    return;
+  }
 }
 
 async function cleanupOldRequestLogs(): Promise<void> {

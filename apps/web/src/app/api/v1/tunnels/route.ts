@@ -5,7 +5,7 @@ import { z } from 'zod';
 
 import { auditLogs, tunnels } from '@agentj/contracts';
 
-import { requireAuth } from '@/lib/auth';
+import { requirePatAuth } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { getWebEnv } from '@/lib/env';
 import { jsonError, jsonNoStore } from '@/lib/http';
@@ -53,17 +53,17 @@ function serializeTunnel(row: typeof tunnels.$inferSelect) {
 }
 
 export async function GET(request: NextRequest) {
-  const auth = await requireAuth(request);
+  const auth = await requirePatAuth(request);
   if (!auth) {
     return jsonError('UNAUTHORIZED', 'Invalid PAT token', 401);
   }
 
-  const rows = await listAccessibleTunnels(auth.userId, auth.patTokenId);
+  const rows = await listAccessibleTunnels(auth.workspaceId, auth.patTokenId);
   return jsonNoStore(rows.map(serializeTunnel));
 }
 
 export async function POST(request: NextRequest) {
-  const auth = await requireAuth(request);
+  const auth = await requirePatAuth(request);
   if (!auth) {
     return jsonError('UNAUTHORIZED', 'Invalid PAT token', 401);
   }
@@ -89,6 +89,7 @@ export async function POST(request: NextRequest) {
         .values({
           id: `tun_${randomUUID()}`,
           patTokenId: auth.patTokenId,
+          workspaceId: auth.workspaceId,
           subdomain,
           status: 'offline',
           targetHost: parsed.data.targetHost,

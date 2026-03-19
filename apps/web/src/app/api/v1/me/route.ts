@@ -1,12 +1,12 @@
 import { type NextRequest } from 'next/server';
 
-import { requireAuth } from '@/lib/auth';
+import { requirePatAuth } from '@/lib/auth';
 import { jsonError, jsonNoStore } from '@/lib/http';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
-  const auth = await requireAuth(request);
+  const auth = await requirePatAuth(request);
   if (!auth) {
     return jsonError('UNAUTHORIZED', 'Invalid PAT token', 401);
   }

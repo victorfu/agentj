@@ -3,9 +3,9 @@ import { type NextRequest, NextResponse } from 'next/server';
 
 import { patTokens } from '@agentj/contracts';
 
+import { requireSessionAuth } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { jsonError } from '@/lib/http';
-import { ensureMvpUser } from '@/lib/mvp-user';
 
 export const dynamic = 'force-dynamic';
 
@@ -13,7 +13,10 @@ export async function DELETE(
   _request: NextRequest,
   context: { params: Promise<{ patId: string }> },
 ) {
-  const user = await ensureMvpUser();
+  const auth = await requireSessionAuth(_request);
+  if (!auth) {
+    return jsonError('UNAUTHORIZED', 'Not logged in', 401);
+  }
 
   const { patId } = await context.params;
 
@@ -23,7 +26,8 @@ export async function DELETE(
     .where(
       and(
         eq(patTokens.id, patId),
-        eq(patTokens.userId, user.id),
+        eq(patTokens.userId, auth.userId),
+        eq(patTokens.workspaceId, auth.workspaceId),
         isNull(patTokens.revokedAt),
       ),
     )

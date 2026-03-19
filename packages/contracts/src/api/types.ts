@@ -1,4 +1,6 @@
 export type TunnelStatus = 'offline' | 'online' | 'stopped';
+export type WorkspaceRole = 'owner' | 'admin' | 'member';
+export type LineWebhookMode = 'relay' | 'managed';
 
 export interface ApiUser {
   id: string;
@@ -8,6 +10,29 @@ export interface ApiUser {
 
 export interface MeResponse {
   user: ApiUser;
+}
+
+export interface SessionWorkspace {
+  id: string;
+  name: string;
+  role: WorkspaceRole;
+}
+
+export interface SessionResponse {
+  user: ApiUser;
+  workspace: SessionWorkspace;
+}
+
+export interface RegisterRequest {
+  email: string;
+  name?: string;
+  password: string;
+  workspaceName?: string;
+}
+
+export interface LoginRequest {
+  email: string;
+  password: string;
 }
 
 export interface Tunnel {
@@ -30,6 +55,59 @@ export interface ConnectTokenResponse {
   connectToken: string;
   expiresInSeconds: number;
   gatewayWebsocketUrl: string;
+}
+
+export interface LineChannel {
+  id: string;
+  workspaceId: string;
+  tunnelId: string;
+  name: string;
+  lineChannelId: string;
+  mode: LineWebhookMode;
+  webhookPath: string;
+  webhookActive: boolean;
+  webhookUrl: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateLineChannelRequest {
+  name: string;
+  tunnelId: string;
+  lineChannelId: string;
+  channelSecret: string;
+  channelAccessToken: string;
+  mode?: LineWebhookMode;
+}
+
+export interface UpdateLineChannelRequest {
+  name?: string;
+  channelSecret?: string;
+  channelAccessToken?: string;
+  mode?: LineWebhookMode;
+}
+
+export interface LineWebhookInfoResponse {
+  channelId: string;
+  expectedWebhookUrl: string;
+  webhookActive: boolean;
+  lineStatus: number;
+  lineResult: Record<string, unknown> | null;
+  lineRequestId: string | null;
+}
+
+export interface LineWebhookSyncResponse {
+  channelId: string;
+  endpoint: string;
+  webhookActive: boolean;
+  lineRequestId: string | null;
+}
+
+export interface LineApiProxyResponse {
+  ok: boolean;
+  lineRequestId: string | null;
+  lineAcceptedRequestId?: string | null;
+  result: Record<string, unknown> | null;
 }
 
 export interface TunnelRequestLog {

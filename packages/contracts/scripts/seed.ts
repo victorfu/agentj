@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 
 import { createDb, createPool } from '../src/db/client.js';
-import { users } from '../src/db/schema.js';
+import { users, workspaceMembers, workspaces } from '../src/db/schema.js';
 
 async function main(): Promise<void> {
   const databaseUrl = process.env.DATABASE_URL;
@@ -25,6 +25,39 @@ async function main(): Promise<void> {
       id: ensuredUserId,
       email: 'dev@agentj.local',
       name: 'Dev User'
+    });
+  }
+
+  let workspace = await db.query.workspaces.findFirst({
+    where: eq(workspaces.createdBy, ensuredUserId)
+  });
+
+  if (!workspace) {
+    const workspaceId = `ws_${randomUUID()}`;
+    await db.insert(workspaces).values({
+      id: workspaceId,
+      name: 'Dev Workspace',
+      createdBy: ensuredUserId
+    });
+    workspace = await db.query.workspaces.findFirst({
+      where: eq(workspaces.id, workspaceId)
+    });
+  }
+
+  if (!workspace) {
+    throw new Error('Failed to resolve workspace in seed');
+  }
+
+  const membership = await db.query.workspaceMembers.findFirst({
+    where: eq(workspaceMembers.workspaceId, workspace.id)
+  });
+
+  if (!membership) {
+    await db.insert(workspaceMembers).values({
+      id: `wm_${randomUUID()}`,
+      workspaceId: workspace.id,
+      userId: ensuredUserId,
+      role: 'owner'
     });
   }
 

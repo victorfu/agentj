@@ -55,7 +55,11 @@ pnpm dev:gateway
 pnpm dev:app
 ```
 
-5. CLI 快速驗證：
+5. 開啟 Dashboard 並註冊帳號：
+
+`http://localhost:3000/login`
+
+6. CLI 快速驗證：
 
 ```sh
 pnpm run build:cli
@@ -68,6 +72,14 @@ pnpm run cli http 8080      # 開啟 tunnel
 Web Dashboard (`http://localhost:3000`) 的 **PATs** 區塊可查看/產生/撤銷 PAT。
 `http` 命令會自動建立 tunnel，不需要額外資源參數。
 本機直接跑 `web + gateway`（未經 Caddy）時，公開網址預設為 `http://<subdomain>.tunnel.localhost:4000`。
+
+## LINE Bot 快速流程
+
+CLI 一鍵初始化 LINE webhook 託管（建立 tunnel + 設定 channel + sync/test webhook + 啟動 agent）：
+
+```sh
+pnpm run cli line init 8080
+```
 
 ## OpenAPI / Swagger 更新
 

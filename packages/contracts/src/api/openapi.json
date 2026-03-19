@@ -2,7 +2,7 @@
   "openapi": "3.1.1",
   "info": {
     "title": "Agentj Control Plane API",
-    "version": "0.1.0"
+    "version": "0.2.0"
   },
   "servers": [
     {
@@ -10,6 +10,41 @@
     }
   ],
   "paths": {
+    "/api/v1/auth/register": {
+      "post": {
+        "summary": "Register account and create session",
+        "responses": {
+          "201": { "description": "Registered" },
+          "409": { "description": "Email conflict" }
+        }
+      }
+    },
+    "/api/v1/auth/login": {
+      "post": {
+        "summary": "Login and create session",
+        "responses": {
+          "200": { "description": "Logged in" },
+          "401": { "description": "Invalid credentials" }
+        }
+      }
+    },
+    "/api/v1/auth/logout": {
+      "post": {
+        "summary": "Logout and revoke session",
+        "responses": {
+          "200": { "description": "Logged out" }
+        }
+      }
+    },
+    "/api/v1/auth/session": {
+      "get": {
+        "summary": "Get current session user/workspace",
+        "responses": {
+          "200": { "description": "Session" },
+          "401": { "description": "Not logged in" }
+        }
+      }
+    },
     "/api/v1/me": {
       "get": {
         "summary": "Get current user",
@@ -22,21 +57,23 @@
     },
     "/api/v1/pats": {
       "get": {
-        "summary": "List personal access tokens (includes full token in MVP)",
+        "summary": "List personal access tokens (session-auth)",
         "responses": {
-          "200": { "description": "List of active PATs including token value" }
+          "200": { "description": "List of active PATs including token value" },
+          "401": { "description": "Not logged in" }
         }
       },
       "post": {
-        "summary": "Create a personal access token",
+        "summary": "Create a personal access token (session-auth)",
         "responses": {
-          "201": { "description": "PAT created; full token returned once" }
+          "201": { "description": "PAT created; full token returned" },
+          "401": { "description": "Not logged in" }
         }
       }
     },
     "/api/v1/pats/{patId}": {
       "delete": {
-        "summary": "Revoke a personal access token",
+        "summary": "Revoke a personal access token (session-auth)",
         "parameters": [
           { "name": "patId", "in": "path", "required": true, "schema": { "type": "string" } }
         ],
@@ -48,7 +85,7 @@
     },
     "/api/v1/pats/{patId}/tunnels": {
       "get": {
-        "summary": "List tunnels belonging to a specific PAT",
+        "summary": "List tunnels belonging to a specific PAT (session-auth)",
         "parameters": [
           { "name": "patId", "in": "path", "required": true, "schema": { "type": "string" } }
         ],
@@ -101,6 +138,86 @@
         "summary": "Get tunnel request log detail",
         "security": [{ "patAuth": [] }],
         "responses": { "200": { "description": "Log detail" } }
+      }
+    },
+    "/api/v1/line/channels": {
+      "get": {
+        "summary": "List LINE channels",
+        "security": [{ "patAuth": [] }],
+        "responses": { "200": { "description": "LINE channels" } }
+      },
+      "post": {
+        "summary": "Create LINE channel",
+        "security": [{ "patAuth": [] }],
+        "responses": { "201": { "description": "LINE channel created" } }
+      }
+    },
+    "/api/v1/line/channels/{channelId}": {
+      "get": {
+        "summary": "Get LINE channel",
+        "security": [{ "patAuth": [] }],
+        "responses": { "200": { "description": "LINE channel" } }
+      },
+      "patch": {
+        "summary": "Update LINE channel",
+        "security": [{ "patAuth": [] }],
+        "responses": { "200": { "description": "LINE channel updated" } }
+      }
+    },
+    "/api/v1/line/channels/{channelId}/webhook": {
+      "get": {
+        "summary": "Get LINE webhook endpoint status",
+        "security": [{ "patAuth": [] }],
+        "responses": { "200": { "description": "Webhook status" } }
+      }
+    },
+    "/api/v1/line/channels/{channelId}/webhook/sync": {
+      "post": {
+        "summary": "Sync webhook endpoint to LINE",
+        "security": [{ "patAuth": [] }],
+        "responses": { "200": { "description": "Webhook synced" } }
+      }
+    },
+    "/api/v1/line/channels/{channelId}/webhook/test": {
+      "post": {
+        "summary": "Run LINE webhook test",
+        "security": [{ "patAuth": [] }],
+        "responses": { "200": { "description": "Webhook test result" } }
+      }
+    },
+    "/api/v1/line/channels/{channelId}/messages/reply": {
+      "post": {
+        "summary": "Send LINE reply message",
+        "security": [{ "patAuth": [] }],
+        "responses": { "200": { "description": "Reply accepted" } }
+      }
+    },
+    "/api/v1/line/channels/{channelId}/messages/push": {
+      "post": {
+        "summary": "Send LINE push message",
+        "security": [{ "patAuth": [] }],
+        "responses": { "200": { "description": "Push accepted" } }
+      }
+    },
+    "/api/v1/line/channels/{channelId}/messages/multicast": {
+      "post": {
+        "summary": "Send LINE multicast message",
+        "security": [{ "patAuth": [] }],
+        "responses": { "200": { "description": "Multicast accepted" } }
+      }
+    },
+    "/api/v1/line/channels/{channelId}/messages/broadcast": {
+      "post": {
+        "summary": "Send LINE broadcast message",
+        "security": [{ "patAuth": [] }],
+        "responses": { "200": { "description": "Broadcast accepted" } }
+      }
+    },
+    "/api/v1/line/channels/{channelId}/profiles/{userId}": {
+      "get": {
+        "summary": "Get LINE user profile",
+        "security": [{ "patAuth": [] }],
+        "responses": { "200": { "description": "Profile" } }
       }
     }
   },

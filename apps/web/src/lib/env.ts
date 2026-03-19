@@ -9,7 +9,9 @@ const webEnvSchema = z.object({
   AGENTJ_GATEWAY_WS_PUBLIC_URL: z.string().url().default('ws://localhost:4000/agent/v1/connect'),
   AGENTJ_AGENT_PING_INTERVAL_MS: z.coerce.number().int().positive().default(30000),
   AGENTJ_AGENT_MAX_MISSED_PONGS: z.coerce.number().int().nonnegative().default(2),
-  AGENTJ_TUNNEL_ONLINE_GRACE_MS: z.coerce.number().int().positive().optional()
+  AGENTJ_TUNNEL_ONLINE_GRACE_MS: z.coerce.number().int().positive().optional(),
+  AGENTJ_AUTH_SESSION_TTL_DAYS: z.coerce.number().int().positive().default(30),
+  AGENTJ_LINE_MESSAGING_API_BASE_URL: z.string().url().default('https://api.line.me')
 });
 
 export type WebEnv = z.infer<typeof webEnvSchema>;
