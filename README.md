@@ -43,7 +43,13 @@ pnpm db:migrate
 pnpm db:seed
 ```
 
-`db:seed` 只會建立預設 dev user，不會預先建立 PAT。
+`db:seed` 只會建立預設 dev user（`dev@agentj.local`），不會設定密碼也不會預先建立 PAT。
+登入前需要先設定密碼：
+
+```sh
+pnpm --filter @agentj/contracts db:reset-password -- <email> <new-password>
+```
+
 PAT 請從 Web Dashboard 產生。
 
 4. 分別啟動服務：
@@ -55,9 +61,11 @@ pnpm dev:gateway
 pnpm dev:app
 ```
 
-5. 開啟 Dashboard 並註冊帳號：
+5. 開啟 Dashboard 並登入或註冊帳號：
 
 `http://localhost:3000/login`
+
+使用 seed user 登入（需先執行上方 `db:reset-password` 設定密碼），或直接在登入頁註冊新帳號。
 
 6. CLI 快速驗證：
 

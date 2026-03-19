@@ -35,7 +35,8 @@
     "lint": "eslint src scripts --max-warnings=0",
     "test": "vitest run",
     "db:migrate": "node --env-file=../../.env --import tsx scripts/migrate.ts",
-    "db:seed": "node --env-file=../../.env --import tsx scripts/seed.ts"
+    "db:seed": "node --env-file=../../.env --import tsx scripts/seed.ts",
+    "db:reset-password": "node --env-file=../../.env --import tsx scripts/reset-password.ts"
   },
   "dependencies": {
     "drizzle-orm": "^0.44.5",
