@@ -4,23 +4,22 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import {
+  Activity,
   Check,
-  CircleAlert,
   Copy,
   ExternalLink,
   Globe,
   KeyRound,
   Loader2,
   LogOut,
-  Terminal
+  Network,
+  RefreshCw,
+  Terminal,
+  Gauge
 } from 'lucide-react';
 
 import { ThemeToggle } from '@/components/theme-toggle';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
@@ -33,11 +32,24 @@ interface PatToken {
   expiresAt: string | null;
 }
 
+interface Tunnel {
+  id: string;
+  subdomain: string;
+  publicUrl: string;
+  status: 'offline' | 'online' | 'stopped';
+  targetHost: string;
+  targetPort: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
 interface CreatedPatResponse {
   token: string;
   id: string;
   createdAt: string;
 }
+
+const REFRESH_INTERVAL_MS = 5000;
 
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
@@ -49,7 +61,7 @@ function CopyButton({ text }: { text: string }) {
       toast.success('Copied to clipboard');
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      // fallback: select text so user can Ctrl-C
+      // fallback
     }
   }
 
@@ -70,57 +82,41 @@ function CopyButton({ text }: { text: string }) {
   );
 }
 
-function CodeBlock({ code, label }: { code: string; label?: string }) {
-  return (
-    <div className="space-y-1.5">
-      {label && <p className="text-xs font-medium text-muted-foreground">{label}</p>}
-      <div className="flex items-center gap-2 rounded-lg border bg-agentj-code p-3">
-        <pre className="flex-1 overflow-x-auto font-mono text-sm leading-relaxed">{code}</pre>
-        <CopyButton text={code} />
-      </div>
-    </div>
-  );
-}
+function StatusBadge({ status }: { status: Tunnel['status'] }) {
+  const config = {
+    online: {
+      bg: 'bg-primary/20 border-primary/20 text-primary',
+      dot: 'bg-primary animate-pulse'
+    },
+    offline: {
+      bg: 'bg-muted-foreground/20 border-muted-foreground/20 text-muted-foreground',
+      dot: 'bg-muted-foreground'
+    },
+    stopped: {
+      bg: 'bg-agentj-stopped/20 border-agentj-stopped/20 text-agentj-stopped',
+      dot: 'bg-agentj-stopped'
+    }
+  } as const;
 
-function StepCard({
-  step,
-  icon,
-  title,
-  description,
-  children
-}: {
-  step: number;
-  icon: React.ReactNode;
-  title: string;
-  description: string;
-  children: React.ReactNode;
-}) {
+  const cfg = config[status];
+  const label = status.charAt(0).toUpperCase() + status.slice(1);
+
   return (
-    <Card
-      className="animate-fade-up bg-card/80 backdrop-blur-sm"
-      style={{ animationDelay: `${step * 60}ms` }}
+    <span
+      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold border ${cfg.bg}`}
     >
-      <CardHeader>
-        <CardTitle className="flex items-center gap-3">
-          <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
-            {step}
-          </span>
-          {icon}
-          {title}
-        </CardTitle>
-        <CardDescription>{description}</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-3">{children}</CardContent>
-    </Card>
+      <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} />
+      {label}
+    </span>
   );
 }
 
 export function Dashboard() {
-  const [pats, setPats] = useState<PatToken[]>([]);
-  const [loadingPats, setLoadingPats] = useState(false);
-  const [newlyCreatedToken, setNewlyCreatedToken] = useState<string | null>(null);
-  const [creatingPat, setCreatingPat] = useState(false);
-  const [revokingPatId, setRevokingPatId] = useState<string | null>(null);
+  const [pat, setPat] = useState<PatToken | null>(null);
+  const [tunnels, setTunnels] = useState<Tunnel[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [regenerating, setRegenerating] = useState(false);
+  const [newToken, setNewToken] = useState<string | null>(null);
 
   async function handleLogout() {
     try {
@@ -130,286 +126,450 @@ export function Dashboard() {
     }
   }
 
+  async function ensurePat(): Promise<PatToken | null> {
+    // Get existing PATs
+    const patsRes = await fetch('/api/v1/pats');
+    if (patsRes.status === 401) {
+      window.location.href = '/login';
+      return null;
+    }
+    if (!patsRes.ok) throw new Error(await patsRes.text());
+    const pats = (await patsRes.json()) as PatToken[];
+
+    if (pats.length > 0) {
+      return pats[0];
+    }
+
+    // Auto-create one PAT for the user
+    const createRes = await fetch('/api/v1/pats', { method: 'POST' });
+    if (createRes.status === 401) {
+      window.location.href = '/login';
+      return null;
+    }
+    if (!createRes.ok) throw new Error(await createRes.text());
+    const created = (await createRes.json()) as CreatedPatResponse;
+    setNewToken(created.token);
+
+    return {
+      id: created.id,
+      prefix: created.token.slice(0, 12),
+      token: created.token,
+      scopes: ['tunnels:write', 'requests:read', 'line:manage', 'line:messages'],
+      createdAt: created.createdAt,
+      expiresAt: null
+    };
+  }
+
+  async function loadTunnels(patId: string, silent: boolean) {
+    try {
+      const res = await fetch(`/api/v1/pats/${patId}/tunnels`);
+      if (!res.ok) return;
+      const data = (await res.json()) as Tunnel[];
+      setTunnels(data);
+    } catch (err) {
+      if (!silent) {
+        toast.error(err instanceof Error ? err.message : 'Failed to load tunnels');
+      }
+    }
+  }
+
+  async function regeneratePat() {
+    if (!pat) return;
+    setRegenerating(true);
+    try {
+      // Revoke the current PAT
+      await fetch(`/api/v1/pats/${pat.id}`, { method: 'DELETE' });
+
+      // Create a new one
+      const createRes = await fetch('/api/v1/pats', { method: 'POST' });
+      if (!createRes.ok) throw new Error(await createRes.text());
+      const created = (await createRes.json()) as CreatedPatResponse;
+      setNewToken(created.token);
+
+      const newPat: PatToken = {
+        id: created.id,
+        prefix: created.token.slice(0, 12),
+        token: created.token,
+        scopes: ['tunnels:write', 'requests:read', 'line:manage', 'line:messages'],
+        createdAt: created.createdAt,
+        expiresAt: null
+      };
+      setPat(newPat);
+      setTunnels([]);
+      toast.success('PAT regenerated');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to regenerate PAT');
+    } finally {
+      setRegenerating(false);
+    }
+  }
+
   useEffect(() => {
-    setLoadingPats(true);
-    void fetch('/api/v1/auth/session')
-      .then(async (res) => {
-        if (res.status === 401) {
+    let isCurrent = true;
+
+    const init = async () => {
+      try {
+        const sessionRes = await fetch('/api/v1/auth/session');
+        if (sessionRes.status === 401) {
           window.location.href = '/login';
-          return null;
-        }
-        if (!res.ok) throw new Error(await res.text());
-        return res.json();
-      })
-      .then((session) => {
-        if (!session) {
-          return null;
-        }
-        return fetch('/api/v1/pats');
-      })
-      .then(async (res) => {
-        if (!res) {
           return;
         }
-        if (!res.ok) throw new Error(await res.text());
-        return res.json() as Promise<PatToken[]>;
-      })
-      .then((result) => {
-        if (result) {
-          setPats(result);
+        if (!sessionRes.ok) throw new Error(await sessionRes.text());
+
+        const currentPat = await ensurePat();
+        if (!isCurrent || !currentPat) return;
+        setPat(currentPat);
+        await loadTunnels(currentPat.id, false);
+      } catch (err) {
+        if (isCurrent) {
+          toast.error('Failed to load dashboard', {
+            description: err instanceof Error ? err.message : 'Unknown error'
+          });
         }
-      })
-      .catch((err: Error) => {
-        toast.error('Failed to load PATs', { description: err.message });
-      })
-      .finally(() => setLoadingPats(false));
+      } finally {
+        if (isCurrent) setLoading(false);
+      }
+    };
+
+    void init();
+
+    return () => {
+      isCurrent = false;
+    };
   }, []);
 
-  async function createPat(): Promise<void> {
-    setCreatingPat(true);
-    try {
-      const response = await fetch('/api/v1/pats', {
-        method: 'POST'
-      });
-      if (response.status === 401) {
-        window.location.href = '/login';
-        return;
-      }
-      if (!response.ok) throw new Error(await response.text());
+  // Auto-refresh tunnels
+  useEffect(() => {
+    if (!pat) return;
+    const timer = setInterval(() => {
+      void loadTunnels(pat.id, true);
+    }, REFRESH_INTERVAL_MS);
+    return () => clearInterval(timer);
+  }, [pat]);
 
-      const created = (await response.json()) as CreatedPatResponse;
-      setNewlyCreatedToken(created.token);
-      setPats((prev) => [
-        ...prev,
-        {
-          id: created.id,
-          prefix: created.token.slice(0, 12),
-          token: created.token,
-          scopes: ['tunnels:write', 'requests:read'],
-          createdAt: created.createdAt,
-          expiresAt: null
-        }
-      ]);
-      toast.success('PAT created');
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to create PAT');
-    } finally {
-      setCreatingPat(false);
-    }
-  }
-
-  async function revokePat(patId: string): Promise<void> {
-    setRevokingPatId(patId);
-    try {
-      const response = await fetch(`/api/v1/pats/${patId}`, {
-        method: 'DELETE'
-      });
-      if (response.status === 401) {
-        window.location.href = '/login';
-        return;
-      }
-      if (!response.ok) throw new Error(await response.text());
-      setPats((prev) => prev.filter((p) => p.id !== patId));
-      toast.success('PAT revoked');
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to revoke PAT');
-    } finally {
-      setRevokingPatId(null);
-    }
-  }
-
-  const authtokenCommand = newlyCreatedToken
-    ? `npx agentj-cli authtoken ${newlyCreatedToken}`
-    : 'npx agentj-cli authtoken <YOUR_PAT>';
+  const onlineTunnels = tunnels.filter((t) => t.status === 'online');
+  const authtokenCommand = newToken
+    ? `npx agentj-cli login ${newToken}`
+    : pat?.token
+      ? `npx agentj-cli login ${pat.token}`
+      : 'npx agentj-cli login <YOUR_PAT>';
 
   return (
-    <main className="mx-auto min-h-screen max-w-5xl px-4 pb-16 sm:px-6 lg:px-8">
+    <main className="max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-8 min-h-screen">
       {/* Header */}
-      <header className="flex items-center justify-between py-5">
-        <div className="flex items-center gap-3">
-          <img src="/logo.svg" alt="Agentj" className="h-10 w-10 rounded-lg dark:hidden" />
-          <img
-            src="/logo-dark.svg"
-            alt="Agentj"
-            className="hidden h-10 w-10 rounded-lg dark:block"
-          />
-          <div>
-            <h1 className="text-xl font-bold leading-tight sm:text-2xl">Agentj</h1>
-            <p className="text-xs text-muted-foreground sm:text-sm">Control Plane</p>
-          </div>
+      <header className="flex items-center justify-between border-b border-border pb-4 mb-8">
+        <div className="flex items-center gap-8">
+          <Link href="/" className="flex items-center gap-2">
+            <div className="bg-primary p-1.5 rounded-lg flex items-center justify-center">
+              <Network className="size-5 text-primary-foreground" />
+            </div>
+            <h2 className="text-lg font-bold tracking-tight">AgentJ</h2>
+          </Link>
+          <nav className="hidden md:flex items-center gap-6">
+            <Link href="/console" className="text-primary text-sm font-semibold">
+              Dashboard
+            </Link>
+            <a
+              href="/docs"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-muted-foreground hover:text-primary text-sm font-medium transition-colors"
+            >
+              Docs
+            </a>
+          </nav>
         </div>
         <div className="flex items-center gap-2">
           <ThemeToggle />
-          <Button variant="outline" size="icon-sm" asChild className="sm:hidden">
-            <Link href="/tunnels">
-              <Globe className="size-4" />
-            </Link>
-          </Button>
-          <Button variant="outline" size="sm" asChild className="hidden sm:inline-flex">
-            <Link href="/tunnels">
-              <Globe className="size-4" />
-              Tunnels
-            </Link>
-          </Button>
-          <Button variant="outline" size="icon-sm" asChild className="sm:hidden">
-            <a href="/docs" target="_blank" rel="noopener noreferrer">
-              <ExternalLink className="size-4" />
-            </a>
-          </Button>
-          <Button variant="outline" size="sm" asChild className="hidden sm:inline-flex">
-            <a href="/docs" target="_blank" rel="noopener noreferrer">
-              API Docs
-              <ExternalLink />
-            </a>
-          </Button>
           <Button
             variant="ghost"
             size="icon-sm"
-            className="text-muted-foreground hover:text-destructive sm:hidden"
+            className="text-muted-foreground hover:text-destructive"
             onClick={() => void handleLogout()}
           >
             <LogOut className="size-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="hidden text-muted-foreground hover:text-destructive sm:inline-flex"
-            onClick={() => void handleLogout()}
-          >
-            <LogOut className="size-4" />
-            Logout
           </Button>
         </div>
       </header>
 
-      <Separator />
-
-      {/* Quick Start */}
-      <div className="mt-8 space-y-1">
-        <h2 className="text-2xl font-bold tracking-tight">Quick Start</h2>
-        <p className="text-sm text-muted-foreground">
-          Three steps to expose your local server to the internet.
-        </p>
-      </div>
-
-      <div className="mt-6 space-y-6">
-        {/* Step 1: Create PAT */}
-        <StepCard
-          step={1}
-          icon={<KeyRound className="size-5 text-primary" />}
-          title="Create a Personal Access Token"
-          description="Click below to generate a PAT for CLI authentication."
-        >
-          {newlyCreatedToken && (
-            <Alert>
-              <CircleAlert className="size-4" />
-              <AlertDescription className="space-y-2">
-                <p className="font-medium">New PAT created.</p>
-                <div className="flex items-center gap-2 rounded-lg border bg-agentj-code p-3">
-                  <pre className="flex-1 overflow-x-auto font-mono text-sm leading-relaxed">
-                    {newlyCreatedToken}
-                  </pre>
-                  <CopyButton text={newlyCreatedToken} />
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Copy this token now -- you won&apos;t be able to see it again.
-                </p>
-                <Button variant="ghost" size="sm" onClick={() => setNewlyCreatedToken(null)}>
-                  Dismiss
-                </Button>
-              </AlertDescription>
-            </Alert>
-          )}
-          <Button onClick={() => void createPat()} disabled={creatingPat}>
-            {creatingPat ? (
-              <>
-                <Loader2 className="animate-spin" />
-                Creating...
-              </>
-            ) : (
-              'New PAT'
-            )}
-          </Button>
-        </StepCard>
-
-        {/* Step 2: Set token */}
-        <StepCard
-          step={2}
-          icon={<Terminal className="size-5 text-primary" />}
-          title="Set your token"
-          description="Store the PAT locally so the CLI can authenticate."
-        >
-          <CodeBlock code={authtokenCommand} />
-        </StepCard>
-
-        {/* Step 3: Start tunnel */}
-        <StepCard
-          step={3}
-          icon={<Globe className="size-5 text-primary" />}
-          title="Start a tunnel"
-          description="Expose your local server with a public URL."
-        >
-          <CodeBlock code="npx agentj-cli http 8080" />
-        </StepCard>
-      </div>
-
-      {/* Manage PATs */}
-      <Card
-        className="mt-10 animate-fade-up bg-card/80 backdrop-blur-sm"
-        style={{ animationDelay: '300ms' }}
-      >
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <KeyRound className="size-5 text-primary" />
-            Manage PATs
-          </CardTitle>
-          <CardDescription>View and revoke your existing Personal Access Tokens.</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {loadingPats ? (
-            <div className="space-y-3">
-              {[1, 2, 3].map((i) => (
-                <Skeleton key={i} className="h-12 w-full rounded-md" />
-              ))}
+      {loading ? (
+        <div className="space-y-6">
+          <Skeleton className="h-10 w-64" />
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {[1, 2, 3, 4].map((i) => (
+              <Skeleton key={i} className="h-24 rounded-xl" />
+            ))}
+          </div>
+          <Skeleton className="h-64 rounded-xl" />
+        </div>
+      ) : (
+        <>
+          {/* Page Header */}
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
+            <div>
+              <h1 className="text-3xl font-extrabold tracking-tight">Project Overview</h1>
+              <p className="text-muted-foreground mt-1">
+                Manage and monitor your real-time webhook delivery systems.
+              </p>
             </div>
-          ) : pats.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No active PATs yet. Create one above to get started.
-            </p>
-          ) : (
-            <div className="space-y-2">
-              {pats.map((pat) => (
-                <div key={pat.id} className="rounded-lg border">
-                  <div className="flex items-center gap-3 px-4 py-3">
-                    <Link
-                      href={`/tunnels?pat=${pat.id}`}
-                      className="min-w-0 flex-1 transition hover:opacity-70"
-                    >
-                      <p className="truncate font-mono text-sm">{pat.prefix}...</p>
-                      <p className="text-xs text-muted-foreground">
-                        Created {new Date(pat.createdAt).toLocaleDateString()}
-                      </p>
-                    </Link>
-                    <div className="flex items-center gap-2">
-                      <Badge variant="secondary" className="text-xs">
-                        {pat.scopes.length} scope{pat.scopes.length !== 1 ? 's' : ''}
-                      </Badge>
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        onClick={() => void revokePat(pat.id)}
-                        disabled={revokingPatId === pat.id}
-                      >
-                        {revokingPatId === pat.id ? <Loader2 className="animate-spin" /> : 'Revoke'}
-                      </Button>
-                    </div>
+          </div>
+
+          {/* Quick Stats */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-10">
+            <div className="bg-primary/5 border border-border p-5 rounded-xl">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-muted-foreground text-sm font-medium">Total Tunnels</span>
+                <Globe className="size-5 text-primary" />
+              </div>
+              <div className="flex items-baseline gap-2">
+                <span className="text-2xl font-bold">{tunnels.length}</span>
+              </div>
+            </div>
+            <div className="bg-primary/5 border border-border p-5 rounded-xl">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-muted-foreground text-sm font-medium">Active Endpoints</span>
+                <Activity className="size-5 text-primary" />
+              </div>
+              <div className="flex items-baseline gap-2">
+                <span className="text-2xl font-bold">{onlineTunnels.length}</span>
+                <span className="text-muted-foreground text-xs font-bold">
+                  {onlineTunnels.length === tunnels.length && tunnels.length > 0
+                    ? 'All online'
+                    : 'Online'}
+                </span>
+              </div>
+            </div>
+            <div className="bg-primary/5 border border-border p-5 rounded-xl">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-muted-foreground text-sm font-medium">PAT Status</span>
+                <KeyRound className="size-5 text-primary" />
+              </div>
+              <div className="flex items-baseline gap-2">
+                <span className="text-2xl font-bold">{pat ? 'Active' : '—'}</span>
+              </div>
+            </div>
+            <div className="bg-primary/5 border border-border p-5 rounded-xl">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-muted-foreground text-sm font-medium">Quick Start</span>
+                <Terminal className="size-5 text-primary" />
+              </div>
+              <div className="flex items-baseline gap-2">
+                <code className="text-sm font-mono text-primary truncate">agentj-cli http 8080</code>
+              </div>
+            </div>
+          </div>
+
+          {/* PAT Section */}
+          {pat && (
+            <div className="bg-primary/5 border border-border rounded-xl p-6 mb-8">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
+                <div>
+                  <h3 className="font-bold text-foreground flex items-center gap-2">
+                    <KeyRound className="size-4 text-primary" />
+                    Personal Access Token
+                  </h3>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Your CLI authentication token. Each account has one PAT.
+                  </p>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void regeneratePat()}
+                  disabled={regenerating}
+                  className="shrink-0"
+                >
+                  {regenerating ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : (
+                    <RefreshCw className="size-4" />
+                  )}
+                  Regenerate
+                </Button>
+              </div>
+
+              {newToken && (
+                <div className="bg-card border border-primary/20 rounded-lg p-4 mb-4">
+                  <p className="text-xs font-bold text-primary uppercase tracking-wider mb-2">
+                    New Token — copy now, it won&apos;t be shown again
+                  </p>
+                  <div className="flex items-center gap-2 bg-muted rounded-md p-3">
+                    <code className="flex-1 overflow-x-auto font-mono text-sm text-foreground">
+                      {newToken}
+                    </code>
+                    <CopyButton text={newToken} />
                   </div>
                 </div>
-              ))}
+              )}
+
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 bg-muted rounded-md p-3">
+                  <code className="flex-1 overflow-x-auto font-mono text-sm text-muted-foreground">
+                    {pat.token ? pat.token : `${pat.prefix}...`}
+                  </code>
+                  <CopyButton text={pat.token ?? pat.prefix} />
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">Set your token:</p>
+                  <div className="flex items-center gap-2 bg-muted rounded-md p-3">
+                    <code className="flex-1 overflow-x-auto font-mono text-sm">{authtokenCommand}</code>
+                    <CopyButton text={authtokenCommand} />
+                  </div>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">Start a tunnel:</p>
+                  <div className="flex items-center gap-2 bg-muted rounded-md p-3">
+                    <code className="flex-1 overflow-x-auto font-mono text-sm">
+                      npx agentj-cli http 8080
+                    </code>
+                    <CopyButton text="npx agentj-cli http 8080" />
+                  </div>
+                </div>
+              </div>
             </div>
           )}
-        </CardContent>
-      </Card>
+
+          {/* Active Tunnels Table */}
+          <div className="bg-primary/5 border border-border rounded-xl overflow-hidden">
+            <div className="px-6 py-4 border-b border-border flex items-center justify-between">
+              <h3 className="font-bold">Active Tunnels</h3>
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <Gauge className="size-3.5" />
+                Auto-refresh 5s
+              </div>
+            </div>
+
+            {tunnels.length === 0 ? (
+              <div className="px-6 py-12 text-center">
+                <Globe className="size-8 text-muted-foreground/30 mx-auto mb-3" />
+                <p className="text-sm text-muted-foreground mb-1">No tunnels yet.</p>
+                <p className="text-xs text-muted-foreground">
+                  Run{' '}
+                  <code className="bg-muted px-1.5 py-0.5 rounded text-primary">
+                    npx agentj-cli http 8080
+                  </code>{' '}
+                  to create your first tunnel.
+                </p>
+              </div>
+            ) : (
+              <>
+                {/* Mobile cards */}
+                <div className="sm:hidden divide-y divide-border">
+                  {tunnels.map((tunnel) => (
+                    <div key={tunnel.id} className="p-4 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="font-semibold">{tunnel.subdomain}</span>
+                        <StatusBadge status={tunnel.status} />
+                      </div>
+                      <a
+                        href={tunnel.publicUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="block truncate font-mono text-xs text-primary bg-primary/10 px-2 py-1 rounded hover:underline"
+                      >
+                        {tunnel.publicUrl}
+                      </a>
+                      <p className="font-mono text-xs text-muted-foreground">
+                        {'→'} {tunnel.targetHost}:{tunnel.targetPort}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Desktop table */}
+                <div className="hidden sm:block overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="text-xs uppercase tracking-wider text-muted-foreground border-b border-border">
+                        <th className="px-6 py-4 font-semibold">Tunnel Name</th>
+                        <th className="px-6 py-4 font-semibold">Status</th>
+                        <th className="px-6 py-4 font-semibold">Public URL</th>
+                        <th className="px-6 py-4 font-semibold">Target</th>
+                        <th className="px-6 py-4 font-semibold text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      {tunnels.map((tunnel) => (
+                        <tr
+                          key={tunnel.id}
+                          className="hover:bg-primary/5 transition-colors group"
+                        >
+                          <td className="px-6 py-4">
+                            <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 rounded bg-primary/20 flex items-center justify-center text-primary">
+                                <Globe className="size-4" />
+                              </div>
+                              <span className="font-semibold">{tunnel.subdomain}</span>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <StatusBadge status={tunnel.status} />
+                          </td>
+                          <td className="px-6 py-4">
+                            <a
+                              href={tunnel.publicUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1.5 font-mono text-sm text-primary/80 bg-primary/10 px-2 py-1 rounded hover:underline"
+                            >
+                              {tunnel.publicUrl}
+                              <ExternalLink className="size-3 shrink-0 opacity-0 group-hover:opacity-100 transition" />
+                            </a>
+                          </td>
+                          <td className="px-6 py-4 font-mono text-sm text-muted-foreground">
+                            {tunnel.targetHost}:{tunnel.targetPort}
+                          </td>
+                          <td className="px-6 py-4 text-right">
+                            <a
+                              href={tunnel.publicUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-primary hover:underline text-sm font-bold"
+                            >
+                              Open
+                            </a>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="px-6 py-4 border-t border-border flex items-center justify-between">
+                  <p className="text-xs text-muted-foreground font-medium">
+                    Showing {tunnels.length} tunnel{tunnels.length !== 1 ? 's' : ''}
+                  </p>
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* System Status Footer */}
+          <div className="mt-12 p-6 border border-border rounded-xl bg-primary/5 flex flex-col md:flex-row items-center justify-between gap-6">
+            <div className="flex items-center gap-4">
+              <div>
+                <p className="text-sm font-bold">Global System Status</p>
+                <div className="flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-primary" />
+                  <p className="text-xs text-muted-foreground">All regions operational</p>
+                </div>
+              </div>
+            </div>
+            <div className="flex gap-8">
+              <div className="text-center">
+                <p className="text-xs text-muted-foreground font-medium">Uptime</p>
+                <p className="text-sm font-bold">99.999%</p>
+              </div>
+              <div className="text-center">
+                <p className="text-xs text-muted-foreground font-medium">Support</p>
+                <a href="/docs" className="text-primary text-sm font-bold hover:underline">
+                  Docs
+                </a>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
     </main>
   );
 }

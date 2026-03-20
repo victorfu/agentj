@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Stitch Webhook Dashboard</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#06c656",
+                        "background-light": "#f5f8f7",
+                        "background-dark": "#0f2317",
+                    },
+                    fontFamily: {
+                        "display": ["Inter"]
+                    },
+                    borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+                },
+            },
+        }
+    </script>
+<style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+    </style>
+</head>
+<body class="bg-background-light dark:bg-background-dark text-slate-900 dark:text-slate-100 font-display min-h-screen">
+<div class="relative flex flex-col w-full min-h-screen">
+<!-- Navigation -->
+<header class="flex items-center justify-between border-b border-slate-200 dark:border-primary/20 px-6 py-4 bg-white dark:bg-background-dark sticky top-0 z-50">
+<div class="flex items-center gap-8">
+<div class="flex items-center gap-3">
+<div class="bg-primary p-1.5 rounded-lg flex items-center justify-center">
+<span class="material-symbols-outlined text-background-dark text-xl font-bold">hub</span>
+</div>
+<h2 class="text-slate-900 dark:text-slate-100 text-lg font-bold tracking-tight">Stitch Webhook</h2>
+</div>
+<nav class="hidden md:flex items-center gap-6">
+<a class="text-primary text-sm font-semibold" href="#">Dashboard</a>
+<a class="text-slate-600 dark:text-slate-400 hover:text-primary dark:hover:text-primary text-sm font-medium transition-colors" href="#">Projects</a>
+<a class="text-slate-600 dark:text-slate-400 hover:text-primary dark:hover:text-primary text-sm font-medium transition-colors" href="#">Logs</a>
+<a class="text-slate-600 dark:text-slate-400 hover:text-primary dark:hover:text-primary text-sm font-medium transition-colors" href="#">Settings</a>
+</nav>
+</div>
+<div class="flex items-center gap-4">
+<div class="relative hidden sm:block">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-lg">search</span>
+<input class="bg-slate-100 dark:bg-primary/10 border-none rounded-lg pl-10 pr-4 py-2 text-sm w-64 focus:ring-2 focus:ring-primary focus:bg-white dark:focus:bg-primary/20 transition-all text-slate-900 dark:text-slate-100 placeholder:text-slate-400" placeholder="Search endpoints..." type="text"/>
+</div>
+<button class="p-2 rounded-lg bg-slate-100 dark:bg-primary/10 text-slate-600 dark:text-slate-300 hover:bg-primary/20 transition-colors">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<div class="w-8 h-8 rounded-full bg-primary/30 border border-primary/50 flex items-center justify-center overflow-hidden">
+<img alt="User Profile" class="w-full h-full object-cover" data-alt="User avatar illustration" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAIcTg_ZuHBUgs5PeMVS13NfEQO3sbqrYHOjMOYJzNk8puvq1QUhu1dmaQVPEgsjraDaJyH8tegRmwuSaMOiJYJomIOy833B83HqDgFzZ_1O1CE135_qyMi09b69UhXM6qyZA5PZAWHsOGWxECCglcVALasqU3rmY97JjjmM3sngXCyf8b0cKv9ByAiWqOjWWluIwHM2HeeEV4o5XzV5C4cqLr4SHCuOSt7tv_68_DxxWfxqs7CpQqsMvyoZBoLr0EAlvnpVwj-mJg"/>
+</div>
+</div>
+</header>
+<main class="max-w-7xl mx-auto w-full px-6 py-8">
+<!-- Header Section -->
+<div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
+<div>
+<h1 class="text-3xl font-extrabold text-slate-900 dark:text-slate-100 tracking-tight">Project Overview</h1>
+<p class="text-slate-500 dark:text-slate-400 mt-1">Manage and monitor your real-time webhook delivery systems.</p>
+</div>
+<button class="bg-primary hover:bg-primary/90 text-background-dark font-bold py-2.5 px-6 rounded-lg flex items-center gap-2 transition-transform active:scale-95 shadow-lg shadow-primary/20">
+<span class="material-symbols-outlined text-[20px]">add</span>
+                New Project
+            </button>
+</div>
+<!-- Quick Stats -->
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-10">
+<div class="bg-white dark:bg-primary/5 border border-slate-200 dark:border-primary/10 p-5 rounded-xl">
+<div class="flex items-center justify-between mb-2">
+<span class="text-slate-500 dark:text-slate-400 text-sm font-medium">Total Requests</span>
+<span class="material-symbols-outlined text-primary text-lg">analytics</span>
+</div>
+<div class="flex items-baseline gap-2">
+<span class="text-2xl font-bold">1,284,592</span>
+<span class="text-primary text-xs font-bold">+12.5%</span>
+</div>
+</div>
+<div class="bg-white dark:bg-primary/5 border border-slate-200 dark:border-primary/10 p-5 rounded-xl">
+<div class="flex items-center justify-between mb-2">
+<span class="text-slate-500 dark:text-slate-400 text-sm font-medium">Active Endpoints</span>
+<span class="material-symbols-outlined text-primary text-lg">lan</span>
+</div>
+<div class="flex items-baseline gap-2">
+<span class="text-2xl font-bold">14</span>
+<span class="text-slate-400 text-xs font-bold">Steady</span>
+</div>
+</div>
+<div class="bg-white dark:bg-primary/5 border border-slate-200 dark:border-primary/10 p-5 rounded-xl">
+<div class="flex items-center justify-between mb-2">
+<span class="text-slate-500 dark:text-slate-400 text-sm font-medium">Success Rate</span>
+<span class="material-symbols-outlined text-primary text-lg">check_circle</span>
+</div>
+<div class="flex items-baseline gap-2">
+<span class="text-2xl font-bold">99.98%</span>
+<span class="text-primary text-xs font-bold">+0.02%</span>
+</div>
+</div>
+<div class="bg-white dark:bg-primary/5 border border-slate-200 dark:border-primary/10 p-5 rounded-xl">
+<div class="flex items-center justify-between mb-2">
+<span class="text-slate-500 dark:text-slate-400 text-sm font-medium">Avg Latency</span>
+<span class="material-symbols-outlined text-primary text-lg">speed</span>
+</div>
+<div class="flex items-baseline gap-2">
+<span class="text-2xl font-bold">142ms</span>
+<span class="text-orange-500 text-xs font-bold">-5ms</span>
+</div>
+</div>
+</div>
+<!-- Projects Table -->
+<div class="bg-white dark:bg-primary/5 border border-slate-200 dark:border-primary/10 rounded-xl overflow-hidden">
+<div class="px-6 py-4 border-b border-slate-200 dark:border-primary/10 flex items-center justify-between bg-slate-50/50 dark:bg-primary/5">
+<h3 class="font-bold text-slate-800 dark:text-slate-200">Active Projects</h3>
+<div class="flex gap-2">
+<button class="p-1.5 rounded hover:bg-slate-200 dark:hover:bg-primary/20 transition-colors text-slate-500 dark:text-slate-400">
+<span class="material-symbols-outlined text-xl">filter_list</span>
+</button>
+<button class="p-1.5 rounded hover:bg-slate-200 dark:hover:bg-primary/20 transition-colors text-slate-500 dark:text-slate-400">
+<span class="material-symbols-outlined text-xl">more_vert</span>
+</button>
+</div>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-primary/10">
+<th class="px-6 py-4 font-semibold">Project Name</th>
+<th class="px-6 py-4 font-semibold">Status</th>
+<th class="px-6 py-4 font-semibold">Public URL</th>
+<th class="px-6 py-4 font-semibold">Requests Today</th>
+<th class="px-6 py-4 font-semibold">Avg Latency</th>
+<th class="px-6 py-4 font-semibold text-right">Actions</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-slate-200 dark:divide-primary/10">
+<!-- Row 1 -->
+<tr class="hover:bg-slate-50 dark:hover:bg-primary/5 transition-colors group">
+<td class="px-6 py-4">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded bg-primary/20 flex items-center justify-center text-primary">
+<span class="material-symbols-outlined text-lg">payments</span>
+</div>
+<span class="font-semibold">Payment Processor</span>
+</div>
+</td>
+<td class="px-6 py-4">
+<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-primary/20 text-primary border border-primary/20">
+<span class="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></span>
+                                    Running
+                                </span>
+</td>
+<td class="px-6 py-4">
+<code class="text-sm text-primary/80 font-mono bg-primary/10 px-2 py-1 rounded">pay-prod.stitch-webhook.dev</code>
+</td>
+<td class="px-6 py-4 font-medium">45.2k</td>
+<td class="px-6 py-4 font-medium">124ms</td>
+<td class="px-6 py-4 text-right">
+<button class="text-primary hover:underline text-sm font-bold">Manage</button>
+</td>
+</tr>
+<!-- Row 2 -->
+<tr class="hover:bg-slate-50 dark:hover:bg-primary/5 transition-colors group">
+<td class="px-6 py-4">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded bg-primary/20 flex items-center justify-center text-primary">
+<span class="material-symbols-outlined text-lg">smart_toy</span>
+</div>
+<span class="font-semibold">Discord Bot</span>
+</div>
+</td>
+<td class="px-6 py-4">
+<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-300 dark:border-slate-700">
+<span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
+                                    Stopped
+                                </span>
+</td>
+<td class="px-6 py-4">
+<code class="text-sm text-slate-500 dark:text-slate-400 font-mono bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded">db-bot-99.stitch-webhook.dev</code>
+</td>
+<td class="px-6 py-4 font-medium">0</td>
+<td class="px-6 py-4 font-medium text-slate-400">N/A</td>
+<td class="px-6 py-4 text-right">
+<button class="text-primary hover:underline text-sm font-bold">Start</button>
+</td>
+</tr>
+<!-- Row 3 -->
+<tr class="hover:bg-slate-50 dark:hover:bg-primary/5 transition-colors group">
+<td class="px-6 py-4">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded bg-primary/20 flex items-center justify-center text-primary">
+<span class="material-symbols-outlined text-lg">sync_alt</span>
+</div>
+<span class="font-semibold">Auth Sync</span>
+</div>
+</td>
+<td class="px-6 py-4">
+<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-primary/20 text-primary border border-primary/20">
+<span class="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></span>
+                                    Running
+                                </span>
+</td>
+<td class="px-6 py-4">
+<code class="text-sm text-primary/80 font-mono bg-primary/10 px-2 py-1 rounded">auth-v2.stitch-webhook.dev</code>
+</td>
+<td class="px-6 py-4 font-medium">12.1k</td>
+<td class="px-6 py-4 font-medium">89ms</td>
+<td class="px-6 py-4 text-right">
+<button class="text-primary hover:underline text-sm font-bold">Manage</button>
+</td>
+</tr>
+<!-- Row 4 -->
+<tr class="hover:bg-slate-50 dark:hover:bg-primary/5 transition-colors group">
+<td class="px-6 py-4">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded bg-primary/20 flex items-center justify-center text-primary">
+<span class="material-symbols-outlined text-lg">inventory_2</span>
+</div>
+<span class="font-semibold">Inventory Sync</span>
+</div>
+</td>
+<td class="px-6 py-4">
+<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-primary/20 text-primary border border-primary/20">
+<span class="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></span>
+                                    Running
+                                </span>
+</td>
+<td class="px-6 py-4">
+<code class="text-sm text-primary/80 font-mono bg-primary/10 px-2 py-1 rounded">inv-prod.stitch-webhook.dev</code>
+</td>
+<td class="px-6 py-4 font-medium">8.4k</td>
+<td class="px-6 py-4 font-medium">210ms</td>
+<td class="px-6 py-4 text-right">
+<button class="text-primary hover:underline text-sm font-bold">Manage</button>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="px-6 py-4 border-t border-slate-200 dark:border-primary/10 bg-slate-50/30 dark:bg-primary/5 flex items-center justify-between">
+<p class="text-xs text-slate-500 dark:text-slate-400 font-medium">Showing 4 of 14 projects</p>
+<div class="flex gap-2">
+<button class="px-3 py-1 rounded border border-slate-300 dark:border-primary/20 text-xs font-bold hover:bg-slate-100 dark:hover:bg-primary/10">Previous</button>
+<button class="px-3 py-1 rounded border border-slate-300 dark:border-primary/20 text-xs font-bold hover:bg-slate-100 dark:hover:bg-primary/10">Next</button>
+</div>
+</div>
+</div>
+<!-- System Status Footer -->
+<div class="mt-12 p-6 border border-slate-200 dark:border-primary/10 rounded-xl bg-white dark:bg-primary/5 flex flex-col md:flex-row items-center justify-between gap-6">
+<div class="flex items-center gap-4">
+<div class="flex -space-x-2">
+<img alt="Team member" class="w-8 h-8 rounded-full border-2 border-background-dark" data-alt="Team member profile photo" src="https://lh3.googleusercontent.com/aida-public/AB6AXuC8heEo4hwi7nHDoUY74T6qSE3lbcJ4oYZdRnUW5slWlaCkxAYe-LxYsD5r7ohk3hBuevc47HfR7pdMIDiUj61ml_DC5RvBUTDh7ow3I8peSGt106MnK1PTg_bgv1op2Ue_XrpFPaahbG82srR4ADU9V2KIrmS_i5LWT18WNZ3FqNLY0RmeDzFNssZYanndg6Hc2ovq-yNdWCGk-HB8nxgWqqv95_DwCw0clyDBOIAr2-hMuaV10SubFT-wsBQTxbta3XG1kQWnESk"/>
+<img alt="Team member" class="w-8 h-8 rounded-full border-2 border-background-dark" data-alt="Team member profile photo" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBzmLE3z2ge_w5OvD6DoY2kZF0IDFMSKCRp1XboyUozjBJjLArZNggz4d7tGVYqVsYQZ20eqKiyYexSM0MOLR0U-Z3aXP-94SN_f18vjg-gk20pey02O6EJD2LJ5DWHXYZq_LQ-wM2Feviq7WDfzEWBhmj3sNh6rpqhmFsvv5OEdJuyPsQXcDVUdILEJIL_bU4fO33I6jMCHdZm9nOuLuWorcNbVqHv9IAcC6ikrnEMFXi2h2q3yXnkpR1qHPWpfOFvyN23940Xzuc"/>
+<div class="w-8 h-8 rounded-full border-2 border-background-dark bg-slate-200 dark:bg-slate-800 flex items-center justify-center text-[10px] font-bold">+5</div>
+</div>
+<div>
+<p class="text-sm font-bold">Global System Status</p>
+<div class="flex items-center gap-1.5">
+<span class="w-2 h-2 rounded-full bg-primary"></span>
+<p class="text-xs text-slate-500 dark:text-slate-400">All regions operational</p>
+</div>
+</div>
+</div>
+<div class="flex gap-8">
+<div class="text-center">
+<p class="text-xs text-slate-500 dark:text-slate-400 font-medium">Uptime</p>
+<p class="text-sm font-bold">99.999%</p>
+</div>
+<div class="text-center">
+<p class="text-xs text-slate-500 dark:text-slate-400 font-medium">Regions</p>
+<p class="text-sm font-bold">12</p>
+</div>
+<div class="text-center">
+<p class="text-xs text-slate-500 dark:text-slate-400 font-medium">Support</p>
+<a class="text-primary text-sm font-bold hover:underline" href="#">Priority</a>
+</div>
+</div>
+</div>
+</main>
+</div>
+</body></html>

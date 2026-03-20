@@ -67,17 +67,28 @@ pnpm dev:app
 
 使用 seed user 登入（需先執行上方 `db:reset-password` 設定密碼），或直接在登入頁註冊新帳號。
 
-6. CLI 快速驗證：
+6. 產生 PAT 並設定 CLI：
 
-```sh
-pnpm run build:cli
-pnpm run cli login          # 貼上從 Web 複製的 PAT
-pnpm run cli http 8080      # 開啟 tunnel
-```
+   1. 登入 Web Dashboard (`http://localhost:3000`)，進入 **PATs** 區塊，點擊產生新的 Personal Access Token（PAT）。
+   2. Build CLI 並儲存 token：
+
+   ```sh
+   pnpm run build:cli
+   pnpm run cli login --token <your-PAT>   # 或 pnpm run cli login <your-PAT>
+   ```
+
+   Token 會存到 `~/.agentj/config-dev.yml`（Dev 模式）。
+
+   3. 驗證身份與開啟 tunnel：
+
+   ```sh
+   pnpm run cli whoami                     # 確認 token 有效
+   pnpm run cli http 8080                  # 開啟 tunnel
+   ```
 
 `pnpm run cli` 會自動載入 `.env`（指向 localhost），與 production 環境隔離。
 
-Web Dashboard (`http://localhost:3000`) 的 **PATs** 區塊可查看/產生/撤銷 PAT。
+Web Dashboard 的 **PATs** 區塊可查看/產生/撤銷 PAT。
 `http` 命令會自動建立 tunnel，不需要額外資源參數。
 本機直接跑 `web + gateway`（未經 Caddy）時，公開網址預設為 `http://<subdomain>.tunnel.localhost:4000`。
 

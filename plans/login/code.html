@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Login | Chlorophyll Carbon Stitch</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;800;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "tertiary": "#ffb5ac",
+              "primary-fixed": "#68ff8a",
+              "on-tertiary-container": "#76231d",
+              "surface-bright": "#1a3524",
+              "secondary": "#91d797",
+              "background": "#0f2317",
+              "on-primary-fixed-variant": "#00531f",
+              "on-tertiary": "#60130f",
+              "secondary-container": "#0c5523",
+              "tertiary-fixed": "#ffdad5",
+              "on-primary-container": "#06c656",
+              "on-background": "#f5f8f7",
+              "tertiary-fixed-dim": "#ffb4aa",
+              "outline-variant": "#06c65633",
+              "inverse-primary": "#006e2c",
+              "secondary-fixed": "#acf3b1",
+              "surface-container-lowest": "#07120c",
+              "on-primary-fixed": "#002108",
+              "tertiary-container": "#ff8b7e",
+              "on-error-container": "#ffdad6",
+              "error-container": "#93000a",
+              "surface-tint": "#06c656",
+              "surface-dim": "#0a1810",
+              "surface-container-highest": "#1c3c28",
+              "on-tertiary-fixed": "#410002",
+              "primary": "#06c656",
+              "outline": "#3c4a3c",
+              "surface-container-high": "#163020",
+              "surface": "#0f2317",
+              "on-secondary-container": "#83c889",
+              "primary-container": "#06c6561a",
+              "on-surface": "#f5f8f7",
+              "secondary-fixed-dim": "#91d797",
+              "inverse-on-surface": "#0f2317",
+              "on-secondary-fixed-variant": "#075221",
+              "inverse-surface": "#dce5d8",
+              "on-primary": "#0f2317",
+              "surface-variant": "#1a3524",
+              "surface-container-low": "#0d2015",
+              "on-secondary": "#003913",
+              "on-error": "#690005",
+              "on-surface-variant": "#bbcbb8",
+              "error": "#ffb4ab",
+              "primary-fixed-dim": "#3fe26e",
+              "surface-container": "#11261a",
+              "on-tertiary-fixed-variant": "#7f2922",
+              "on-secondary-fixed": "#002108"
+            },
+            fontFamily: {
+              "headline": ["Inter"],
+              "body": ["Inter"],
+              "label": ["Inter"]
+            },
+            borderRadius: {"DEFAULT": "0.125rem", "lg": "0.25rem", "xl": "0.5rem", "full": "0.75rem"},
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            vertical-align: middle;
+        }
+        .pulse-active {
+            box-shadow: 0 0 0 0 rgba(6, 198, 86, 0.4);
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(6, 198, 86, 0.7); }
+            70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(6, 198, 86, 0); }
+            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(6, 198, 86, 0); }
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background font-body selection:bg-primary/30">
+<!-- TopNavBar (Note: Suppressed based on "Linear/Transactional" logic but included per prompt instructions) -->
+<nav class="fixed top-0 w-full z-50 bg-[#0f2317]/80 backdrop-blur-xl shadow-[0_10px_15px_-3px_rgba(6,198,86,0.1)]">
+<div class="flex justify-between items-center px-6 py-4 max-w-7xl mx-auto">
+<div class="text-xl font-black tracking-tighter text-[#06c656] uppercase">Chlorophyll Carbon</div>
+<div class="hidden md:flex items-center gap-8">
+<a class="font-['Inter'] tracking-tight text-[14px] font-medium text-[#06c656]/60 hover:text-[#06c656] transition-colors" href="#">Docs</a>
+<a class="font-['Inter'] tracking-tight text-[14px] font-medium text-[#06c656]/60 hover:text-[#06c656] transition-colors" href="#">Pricing</a>
+<a class="font-['Inter'] tracking-tight text-[14px] font-medium text-[#06c656]/60 hover:text-[#06c656] transition-colors" href="#">Status</a>
+<button class="bg-primary text-on-primary px-5 py-2 font-bold tracking-tight active:scale-95 duration-100">Console</button>
+</div>
+</div>
+<div class="bg-[#06c656]/10 h-[1px] w-full"></div>
+</nav>
+<main class="min-h-screen pt-24 pb-12 flex items-center justify-center px-4 relative overflow-hidden">
+<!-- Background Organic Pattern -->
+<div class="absolute inset-0 z-0 opacity-10 pointer-events-none" data-alt="Technical green grid pattern on dark background" style="background-image: radial-gradient(circle at 2px 2px, #06c656 1px, transparent 0); background-size: 40px 40px;">
+</div>
+<div class="w-full max-w-[480px] z-10">
+<!-- Login Container -->
+<div class="bg-surface-container border border-outline-variant p-8 md:p-12 shadow-lg relative">
+<!-- Status indicator (Pulse) -->
+<div class="absolute top-6 right-6 flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-primary pulse-active"></span>
+<span class="text-[10px] font-bold tracking-widest text-primary/60 uppercase">System Ready</span>
+</div>
+<!-- Identity -->
+<div class="mb-10">
+<div class="flex items-center gap-3 mb-6">
+<div class="w-10 h-10 bg-primary-container flex items-center justify-center">
+<span class="material-symbols-outlined text-primary text-3xl" data-icon="hub">hub</span>
+</div>
+<span class="text-primary font-black tracking-tighter text-xl uppercase">Stitch</span>
+</div>
+<h1 class="text-3xl font-black text-on-background tracking-tight mb-2">Sign in to Stitch</h1>
+<p class="text-on-surface-variant text-sm font-medium">Synthetic photosynthesis for webhooks.</p>
+</div>
+<!-- Form -->
+<form class="space-y-6">
+<div>
+<label class="block text-[10px] font-bold uppercase tracking-wider text-primary mb-2">Network Endpoint (Email)</label>
+<div class="relative group">
+<span class="absolute left-4 top-1/2 -translate-y-1/2 material-symbols-outlined text-primary/40 group-focus-within:text-primary transition-colors" data-icon="alternate_email">alternate_email</span>
+<input class="w-full bg-surface-container-high border-b-2 border-primary/20 focus:border-primary focus:ring-0 text-on-surface py-4 pl-12 pr-4 transition-all placeholder:text-on-surface-variant/30 font-medium" placeholder="dev@chlorophyll.network" type="email"/>
+</div>
+</div>
+<div>
+<div class="flex justify-between items-center mb-2">
+<label class="block text-[10px] font-bold uppercase tracking-wider text-primary">Access Token (Password)</label>
+<a class="text-[10px] font-bold uppercase tracking-wider text-primary/60 hover:text-primary transition-colors underline decoration-primary/20" href="#">Forgot Password?</a>
+</div>
+<div class="relative group">
+<span class="absolute left-4 top-1/2 -translate-y-1/2 material-symbols-outlined text-primary/40 group-focus-within:text-primary transition-colors" data-icon="lock">lock</span>
+<input class="w-full bg-surface-container-high border-b-2 border-primary/20 focus:border-primary focus:ring-0 text-on-surface py-4 pl-12 pr-4 transition-all placeholder:text-on-surface-variant/30 font-medium" placeholder="••••••••••••" type="password"/>
+</div>
+</div>
+<button class="w-full bg-primary text-on-primary py-4 font-black tracking-tighter uppercase text-lg hover:bg-primary-fixed transition-all active:scale-[0.98] duration-100 flex items-center justify-center gap-2" type="submit">
+                        Initialize Session
+                        <span class="material-symbols-outlined" data-icon="terminal">terminal</span>
+</button>
+</form>
+<!-- Divider -->
+<div class="relative my-10 flex items-center justify-center">
+<div class="absolute inset-0 flex items-center">
+<div class="w-full border-t border-outline-variant"></div>
+</div>
+<span class="relative px-4 bg-surface-container text-[10px] font-black uppercase text-on-surface-variant/40 tracking-[0.2em]">External Integration</span>
+</div>
+<!-- Social Login -->
+<button class="w-full bg-[#06c755] text-white py-4 font-bold tracking-tight hover:opacity-90 transition-all flex items-center justify-center gap-3 active:scale-[0.98]">
+<span class="material-symbols-outlined" data-icon="chat" style="font-variation-settings: 'FILL' 1;">chat</span>
+                    Sign in with LINE
+                </button>
+<!-- Redirect -->
+<div class="mt-8 text-center">
+<p class="text-sm text-on-surface-variant">
+                        New entity? 
+                        <a class="text-primary font-bold hover:underline ml-1" href="#">Establish connection (Register)</a>
+</p>
+</div>
+</div>
+<!-- Bottom Metadata -->
+<div class="mt-6 flex justify-between items-center text-[10px] font-bold uppercase tracking-[0.2em] text-primary/30 px-2">
+<span>Node: US-EAST-1</span>
+<span>Latency: 14ms</span>
+<span>v4.1.0-stable</span>
+</div>
+</div>
+</main>
+<!-- Footer -->
+<footer class="w-full py-12 px-6 border-t border-[#06c656]/10 bg-[#0f2317]">
+<div class="flex flex-col md:flex-row justify-between items-center gap-4 max-w-7xl mx-auto">
+<div class="text-[#06c656] font-extrabold font-['Inter'] text-[12px] uppercase tracking-wider">
+                © 2024 Chlorophyll Carbon. Synthetic Photosynthesis for Webhooks.
+            </div>
+<div class="flex items-center gap-6 divide-x divide-[#06c656]/10">
+<a class="pl-6 font-['Inter'] text-[12px] uppercase tracking-wider font-bold text-[#06c656]/40 hover:text-[#06c656] transition-opacity duration-300 hover:underline decoration-[#06c656]/50" href="#">Privacy</a>
+<a class="pl-6 font-['Inter'] text-[12px] uppercase tracking-wider font-bold text-[#06c656]/40 hover:text-[#06c656] transition-opacity duration-300 hover:underline decoration-[#06c656]/50" href="#">Terms</a>
+<a class="pl-6 font-['Inter'] text-[12px] uppercase tracking-wider font-bold text-[#06c656]/40 hover:text-[#06c656] transition-opacity duration-300 hover:underline decoration-[#06c656]/50" href="#">Security</a>
+<a class="pl-6 font-['Inter'] text-[12px] uppercase tracking-wider font-bold text-[#06c656]/40 hover:text-[#06c656] transition-opacity duration-300 hover:underline decoration-[#06c656]/50" href="#">GitHub</a>
+</div>
+</div>
+</footer>
+</body></html>

@@ -6,7 +6,6 @@ import { saveToken } from '../lib/token-store.js';
 export default class Login extends Command {
   static description = 'Store a Personal Access Token for CLI use';
 
-  static aliases = ['authtoken', 'config:add-authtoken'];
 
   static args = {
     token: Args.string({
@@ -27,7 +26,7 @@ export default class Login extends Command {
     const { args, flags } = await this.parse(Login);
     const token = flags.token ?? args.token;
     if (!token) {
-      throw new Error('Token is required. Provide `--token <PAT>` or `aj authtoken <PAT>`.');
+      throw new Error('Token is required. Provide `--token <PAT>` or `aj login <PAT>`.');
     }
 
     const config = resolveCliConfig();

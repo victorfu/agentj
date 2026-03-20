@@ -15,4 +15,3 @@ apps/web/.next
 packages/cli/tmp
 
 .claude/
-plans/

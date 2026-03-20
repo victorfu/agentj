@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "tertiary": "#ffb5ac",
+              "primary-fixed": "#68ff8a",
+              "on-tertiary-container": "#76231d",
+              "surface-bright": "#1a3524",
+              "secondary": "#91d797",
+              "background": "#0f2317",
+              "on-primary-fixed-variant": "#00531f",
+              "on-tertiary": "#60130f",
+              "secondary-container": "#0c5523",
+              "tertiary-fixed": "#ffdad5",
+              "on-primary-container": "#06c656",
+              "on-background": "#f5f8f7",
+              "tertiary-fixed-dim": "#ffb4aa",
+              "outline-variant": "#06c65633",
+              "inverse-primary": "#006e2c",
+              "secondary-fixed": "#acf3b1",
+              "surface-container-lowest": "#07120c",
+              "on-primary-fixed": "#002108",
+              "tertiary-container": "#ff8b7e",
+              "on-error-container": "#ffdad6",
+              "error-container": "#93000a",
+              "surface-tint": "#06c656",
+              "surface-dim": "#0a1810",
+              "surface-container-highest": "#1c3c28",
+              "on-tertiary-fixed": "#410002",
+              "primary": "#06c656",
+              "outline": "#3c4a3c",
+              "surface-container-high": "#163020",
+              "surface": "#0f2317",
+              "on-secondary-container": "#83c889",
+              "primary-container": "#06c6561a",
+              "on-surface": "#f5f8f7",
+              "secondary-fixed-dim": "#91d797",
+              "inverse-on-surface": "#0f2317",
+              "on-secondary-fixed-variant": "#075221",
+              "inverse-surface": "#dce5d8",
+              "on-primary": "#0f2317",
+              "surface-variant": "#1a3524",
+              "surface-container-low": "#0d2015",
+              "on-secondary": "#003913",
+              "on-error": "#690005",
+              "on-surface-variant": "#bbcbb8",
+              "error": "#ffb4ab",
+              "primary-fixed-dim": "#3fe26e",
+              "surface-container": "#11261a",
+              "on-tertiary-fixed-variant": "#7f2922",
+              "on-secondary-fixed": "#002108"
+            },
+            fontFamily: {
+              "headline": ["Inter"],
+              "body": ["Inter"],
+              "label": ["Inter"]
+            },
+            borderRadius: {"DEFAULT": "0.125rem", "lg": "0.25rem", "xl": "0.5rem", "full": "0.75rem"},
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        body {
+            background-color: #0f2317;
+            color: #f5f8f7;
+            font-family: 'Inter', sans-serif;
+        }
+        .pulse-glow {
+            box-shadow: 0 0 15px rgba(6, 198, 86, 0.2);
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col">
+<!-- TopNavBar -->
+<nav class="fixed top-0 w-full z-50 bg-[#0f2317]/80 backdrop-blur-xl shadow-[0_10px_15px_-3px_rgba(6,198,86,0.1)]">
+<div class="flex justify-between items-center px-6 py-4 max-w-7xl mx-auto">
+<div class="text-xl font-black tracking-tighter text-[#06c656] uppercase">
+                Chlorophyll Carbon
+            </div>
+<div class="hidden md:flex items-center space-x-8 font-['Inter'] tracking-tight text-[14px] font-medium">
+<a class="text-[#06c656]/60 hover:text-[#06c656] transition-colors" href="#">Docs</a>
+<a class="text-[#06c656]/60 hover:text-[#06c656] transition-colors" href="#">Pricing</a>
+<a class="text-[#06c656]/60 hover:text-[#06c656] transition-colors" href="#">Status</a>
+<button class="bg-[#06c656] text-[#0f2317] px-4 py-1.5 rounded-sm font-bold active:scale-95 duration-100 transition-all">Console</button>
+</div>
+</div>
+<div class="bg-[#06c656]/10 h-[1px] w-full"></div>
+</nav>
+<main class="flex-grow pt-24 pb-12 flex items-center justify-center px-6">
+<div class="w-full max-w-[1100px] grid md:grid-cols-2 gap-0 overflow-hidden rounded-xl border border-outline-variant bg-surface-container-low pulse-glow">
+<!-- Left Side: Visual/Context -->
+<div class="hidden md:flex flex-col justify-between p-12 bg-surface-container relative overflow-hidden">
+<div class="absolute inset-0 opacity-20 pointer-events-none">
+<div class="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_30%_30%,_#06c65633_0%,_transparent_70%)]"></div>
+</div>
+<div class="relative z-10">
+<div class="flex items-center gap-2 mb-8">
+<span class="material-symbols-outlined text-primary text-3xl" data-icon="hub">hub</span>
+<span class="text-xl font-black tracking-tighter text-primary uppercase">Stitch</span>
+</div>
+<h2 class="text-3xl font-extrabold tracking-tight text-on-surface mb-6">Synthetic Photosynthesis for Webhooks.</h2>
+<p class="text-on-surface-variant leading-relaxed max-w-md">Deploy high-density event streams with the world's most efficient routing engine. Scale from zero to billions of requests with biological precision.</p>
+</div>
+<div class="relative z-10 bg-primary/5 p-6 rounded-lg border border-primary/10">
+<div class="flex items-center gap-3 mb-4">
+<div class="w-2 h-2 rounded-full bg-primary animate-pulse"></div>
+<span class="text-[10px] font-bold tracking-widest text-primary uppercase">System Status</span>
+</div>
+<div class="space-y-3">
+<div class="flex justify-between text-[12px]">
+<span class="text-on-surface-variant font-medium">Global Throughput</span>
+<span class="text-primary font-bold">14.2M req/s</span>
+</div>
+<div class="w-full bg-primary/10 h-1 rounded-full overflow-hidden">
+<div class="bg-primary h-full w-[85%]"></div>
+</div>
+</div>
+</div>
+</div>
+<!-- Right Side: Registration Form -->
+<div class="p-8 md:p-12 bg-surface-container-low flex flex-col justify-center">
+<div class="mb-8">
+<h1 class="text-2xl font-bold tracking-tight text-on-surface mb-2">Create your Stitch account</h1>
+<p class="text-on-surface-variant text-[14px]">Start building your technical ecosystem today.</p>
+</div>
+<form class="space-y-5">
+<!-- Full Name -->
+<div class="space-y-1.5">
+<label class="text-[12px] font-bold tracking-wider text-primary uppercase" for="fullname">Full Name</label>
+<div class="relative">
+<input class="w-full bg-primary-container border-none focus:ring-2 focus:ring-primary text-on-surface px-4 py-3 rounded-sm transition-all text-[14px] placeholder:text-on-surface-variant/30" id="fullname" placeholder="Linus Torvalds" type="text"/>
+</div>
+</div>
+<!-- Email -->
+<div class="space-y-1.5">
+<label class="text-[12px] font-bold tracking-wider text-primary uppercase" for="email">Email Address</label>
+<div class="relative">
+<input class="w-full bg-primary-container border-none focus:ring-2 focus:ring-primary text-on-surface px-4 py-3 rounded-sm transition-all text-[14px] placeholder:text-on-surface-variant/30" id="email" placeholder="dev@stitch.network" type="email"/>
+</div>
+</div>
+<!-- Password -->
+<div class="space-y-1.5">
+<label class="text-[12px] font-bold tracking-wider text-primary uppercase" for="password">Password</label>
+<div class="relative">
+<input class="w-full bg-primary-container border-none focus:ring-2 focus:ring-primary text-on-surface px-4 py-3 rounded-sm transition-all text-[14px] placeholder:text-on-surface-variant/30" id="password" placeholder="••••••••••••" type="password"/>
+</div>
+</div>
+<!-- Terms -->
+<div class="flex items-start gap-3 py-2">
+<input class="mt-1 w-4 h-4 bg-primary-container border-outline rounded-sm text-primary focus:ring-primary focus:ring-offset-background" id="terms" type="checkbox"/>
+<label class="text-[12px] text-on-surface-variant leading-tight" for="terms">
+                            I agree to the <a class="text-primary hover:underline" href="#">Terms of Service</a> and <a class="text-primary hover:underline" href="#">Privacy Policy</a>.
+                        </label>
+</div>
+<!-- Primary Action -->
+<button class="w-full bg-[#06c656] text-[#0f2317] py-3.5 rounded-sm font-extrabold tracking-tight text-[16px] hover:shadow-[0_0_20px_rgba(6,198,86,0.3)] transition-all active:scale-[0.98] duration-100" type="submit">
+                        Get Started
+                    </button>
+<!-- Divider -->
+<div class="relative py-4 flex items-center gap-4">
+<div class="flex-grow h-[1px] bg-outline-variant"></div>
+<span class="text-[10px] font-bold tracking-widest text-on-surface-variant/50 uppercase">OR CONTINUE WITH</span>
+<div class="flex-grow h-[1px] bg-outline-variant"></div>
+</div>
+<!-- Social Signup -->
+<button class="w-full flex items-center justify-center gap-3 bg-[#06c656]/10 text-primary py-3 rounded-sm font-bold border border-primary/20 hover:bg-primary/20 transition-all" type="button">
+<span class="material-symbols-outlined" data-icon="forum">forum</span>
+                        LINE
+                    </button>
+<p class="text-center text-[13px] text-on-surface-variant mt-6">
+                        Already have an account? <a class="text-primary font-bold hover:underline" href="#">Sign in</a>
+</p>
+</form>
+</div>
+</div>
+</main>
+<!-- Footer -->
+<footer class="w-full py-12 px-6 border-t border-[#06c656]/10 bg-[#0f2317]">
+<div class="flex flex-col md:flex-row justify-between items-center gap-4 max-w-7xl mx-auto">
+<div class="text-[#06c656] font-extrabold">
+                © 2024 Chlorophyll Carbon. Synthetic Photosynthesis for Webhooks.
+            </div>
+<div class="flex gap-6 divide-x divide-[#06c656]/10">
+<a class="pl-6 font-['Inter'] text-[12px] uppercase tracking-wider font-bold text-[#06c656]/40 hover:text-[#06c656] hover:underline decoration-[#06c656]/50 transition-opacity duration-300" href="#">Privacy</a>
+<a class="pl-6 font-['Inter'] text-[12px] uppercase tracking-wider font-bold text-[#06c656]/40 hover:text-[#06c656] hover:underline decoration-[#06c656]/50 transition-opacity duration-300" href="#">Terms</a>
+<a class="pl-6 font-['Inter'] text-[12px] uppercase tracking-wider font-bold text-[#06c656]/40 hover:text-[#06c656] hover:underline decoration-[#06c656]/50 transition-opacity duration-300" href="#">Security</a>
+<a class="pl-6 font-['Inter'] text-[12px] uppercase tracking-wider font-bold text-[#06c656]/40 hover:text-[#06c656] hover:underline decoration-[#06c656]/50 transition-opacity duration-300" href="#">GitHub</a>
+</div>
+</div>
+</footer>
+</body></html>

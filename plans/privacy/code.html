@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;800;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "background": "#0f2317",
+              "surface-container-low": "#0d2015",
+              "primary-container": "#06c6561a",
+              "secondary-fixed": "#acf3b1",
+              "on-tertiary-fixed": "#410002",
+              "primary-fixed": "#68ff8a",
+              "tertiary-fixed-dim": "#ffb4aa",
+              "surface-tint": "#06c656",
+              "surface": "#0f2317",
+              "surface-variant": "#1a3524",
+              "inverse-primary": "#006e2c",
+              "surface-container-lowest": "#07120c",
+              "primary": "#06c656",
+              "on-surface": "#f5f8f7",
+              "on-secondary": "#003913",
+              "surface-container": "#11261a",
+              "secondary": "#91d797",
+              "surface-container-high": "#163020",
+              "on-tertiary": "#60130f",
+              "surface-container-highest": "#1c3c28",
+              "surface-dim": "#0a1810",
+              "on-primary": "#0f2317",
+              "error-container": "#93000a",
+              "on-primary-fixed-variant": "#00531f",
+              "inverse-on-surface": "#0f2317",
+              "outline": "#3c4a3c",
+              "secondary-container": "#0c5523",
+              "on-tertiary-container": "#76231d",
+              "on-secondary-fixed": "#002108",
+              "on-error": "#690005",
+              "outline-variant": "#06c65633",
+              "tertiary-fixed": "#ffdad5",
+              "on-secondary-fixed-variant": "#075221",
+              "inverse-surface": "#dce5d8",
+              "tertiary-container": "#ff8b7e",
+              "surface-bright": "#1a3524",
+              "primary-fixed-dim": "#3fe26e",
+              "secondary-fixed-dim": "#91d797",
+              "tertiary": "#ffb5ac",
+              "on-surface-variant": "#bbcbb8",
+              "error": "#ffb4ab",
+              "on-tertiary-fixed-variant": "#7f2922",
+              "on-primary-container": "#06c656",
+              "on-primary-fixed": "#002108",
+              "on-background": "#f5f8f7",
+              "on-secondary-container": "#83c889",
+              "on-error-container": "#ffdad6"
+            },
+            fontFamily: {
+              "headline": ["Inter"],
+              "body": ["Inter"],
+              "label": ["Inter"]
+            },
+            borderRadius: {"DEFAULT": "0.125rem", "lg": "0.25rem", "xl": "0.5rem", "full": "0.75rem"},
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .pulse-indicator {
+            box-shadow: 0 0 0 0 rgba(6, 198, 86, 0.4);
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(6, 198, 86, 0.4); }
+            70% { box-shadow: 0 0 0 10px rgba(6, 198, 86, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(6, 198, 86, 0); }
+        }
+    </style>
+</head>
+<body class="bg-background text-on-surface font-body selection:bg-primary/30">
+<!-- TopNavBar -->
+<header class="fixed top-0 w-full z-50 bg-[#0f2317]/80 backdrop-blur-xl shadow-[0_10px_15px_-3px_rgba(6,198,86,0.1)]">
+<div class="flex justify-between items-center px-6 py-4 max-w-7xl mx-auto">
+<div class="text-xl font-black tracking-tighter text-[#06c656] uppercase">Chlorophyll Carbon</div>
+<nav class="hidden md:flex gap-8 items-center font-['Inter'] tracking-tight text-[14px] font-medium">
+<a class="text-[#06c656]/60 hover:text-[#06c656] transition-colors" href="#">Docs</a>
+<a class="text-[#06c656]/60 hover:text-[#06c656] transition-colors" href="#">Pricing</a>
+<a class="text-[#06c656]/60 hover:text-[#06c656] transition-colors" href="#">Status</a>
+</nav>
+<div class="flex items-center gap-4">
+<button class="bg-[#06c656] text-[#0f2317] px-4 py-1.5 font-bold text-[13px] active:scale-95 duration-100 uppercase tracking-tight">Console</button>
+</div>
+</div>
+<div class="bg-[#06c656]/10 h-[1px] w-full"></div>
+</header>
+<main class="pt-24 pb-20 px-6 max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-12 gap-12">
+<!-- Sidebar Navigation -->
+<aside class="md:col-span-3 sticky top-28 self-start hidden md:block">
+<div class="space-y-1">
+<p class="text-[10px] font-bold tracking-widest text-primary/40 uppercase mb-4">Documentation</p>
+<nav class="flex flex-col gap-1">
+<a class="group flex items-center gap-3 px-3 py-2 text-[13px] font-medium text-primary bg-primary/10 border-l-2 border-primary" href="#collection">
+<span class="material-symbols-outlined text-[18px]">database</span>
+                        Information Collection
+                    </a>
+<a class="group flex items-center gap-3 px-3 py-2 text-[13px] font-medium text-on-surface-variant hover:bg-primary/5 transition-all" href="#usage">
+<span class="material-symbols-outlined text-[18px]">terminal</span>
+                        Data Processing
+                    </a>
+<a class="group flex items-center gap-3 px-3 py-2 text-[13px] font-medium text-on-surface-variant hover:bg-primary/5 transition-all" href="#retention">
+<span class="material-symbols-outlined text-[18px]">history</span>
+                        Retention Policy
+                    </a>
+<a class="group flex items-center gap-3 px-3 py-2 text-[13px] font-medium text-on-surface-variant hover:bg-primary/5 transition-all" href="#integrations">
+<span class="material-symbols-outlined text-[18px]">extension</span>
+                        Third-Party Services
+                    </a>
+<a class="group flex items-center gap-3 px-3 py-2 text-[13px] font-medium text-on-surface-variant hover:bg-primary/5 transition-all" href="#rights">
+<span class="material-symbols-outlined text-[18px]">verified_user</span>
+                        User Rights
+                    </a>
+</nav>
+</div>
+<div class="mt-12 p-4 bg-surface-container-high rounded-xl border border-outline-variant">
+<div class="flex items-center gap-2 mb-2">
+<div class="w-2 h-2 rounded-full bg-primary pulse-indicator"></div>
+<span class="text-[10px] font-bold tracking-widest text-primary uppercase">System Secure</span>
+</div>
+<p class="text-[12px] text-on-surface-variant leading-relaxed">Compliance status: SOC2-ready. All data encrypted in transit (TLS 1.3).</p>
+<button class="mt-4 w-full flex items-center justify-center gap-2 py-2 bg-primary/10 text-primary font-bold text-[11px] uppercase tracking-wider hover:bg-primary/20 transition-all">
+<span class="material-symbols-outlined text-[16px]">download</span>
+                    Download PDF
+                </button>
+</div>
+</aside>
+<!-- Privacy Content -->
+<article class="md:col-span-9 space-y-16">
+<!-- Hero Header -->
+<section class="space-y-4">
+<div class="inline-flex items-center gap-2 px-3 py-1 bg-primary/10 text-primary text-[10px] font-black uppercase tracking-widest rounded-full">
+                    Legal Protocol v4.0.2
+                </div>
+<h1 class="text-[40px] font-black tracking-tighter leading-none text-on-surface">Privacy Policy</h1>
+<p class="text-on-surface-variant text-[16px] max-w-2xl leading-relaxed">
+                    Chlorophyll Carbon is built on a foundation of cryptographic transparency. This document outlines how we ingest, route, and store data in our synthetic photosynthesis engine. Last updated: <span class="text-primary">October 24, 2024</span>.
+                </p>
+</section>
+<!-- 1. Information Collection -->
+<section class="space-y-6" id="collection">
+<div class="flex items-center gap-4">
+<div class="w-10 h-10 flex items-center justify-center bg-primary-container text-primary rounded-lg border border-outline-variant">
+<span class="material-symbols-outlined">data_object</span>
+</div>
+<h2 class="text-2xl font-bold tracking-tight">1. Information Collection</h2>
+</div>
+<div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+<div class="p-4 bg-surface-container border border-outline-variant rounded-xl">
+<p class="text-[10px] font-bold text-primary/60 uppercase tracking-widest mb-1">Identity</p>
+<p class="text-[14px] font-medium text-on-surface">User IDs &amp; Email</p>
+<p class="text-[12px] text-on-surface-variant mt-2 leading-tight">Stored for account authentication and critical system alerts.</p>
+</div>
+<div class="p-4 bg-surface-container border border-outline-variant rounded-xl">
+<p class="text-[10px] font-bold text-primary/60 uppercase tracking-widest mb-1">Inbound</p>
+<p class="text-[14px] font-medium text-on-surface">Webhook Payloads</p>
+<p class="text-[12px] text-on-surface-variant mt-2 leading-tight">Raw JSON/XML data received from external event triggers.</p>
+</div>
+<div class="p-4 bg-surface-container border border-outline-variant rounded-xl">
+<p class="text-[10px] font-bold text-primary/60 uppercase tracking-widest mb-1">System</p>
+<p class="text-[14px] font-medium text-on-surface">Telemetry Data</p>
+<p class="text-[12px] text-on-surface-variant mt-2 leading-tight">IP addresses and browser headers for security auditing.</p>
+</div>
+</div>
+</section>
+<!-- 2. How We Use Data -->
+<section class="space-y-6" id="usage">
+<div class="flex items-center gap-4">
+<div class="w-10 h-10 flex items-center justify-center bg-primary-container text-primary rounded-lg border border-outline-variant">
+<span class="material-symbols-outlined">settings_input_component</span>
+</div>
+<h2 class="text-2xl font-bold tracking-tight">2. How We Use Data</h2>
+</div>
+<div class="space-y-4 text-on-surface-variant text-[14px] leading-relaxed">
+<p>Our processing engine utilizes your data strictly for the technical execution of your defined workflows:</p>
+<ul class="space-y-3">
+<li class="flex gap-4">
+<span class="text-primary font-bold">01</span>
+<span><strong class="text-on-surface">Routing &amp; Transformation:</strong> We parse inbound payloads to route data between configured nodes and execute user-defined logic.</span>
+</li>
+<li class="flex gap-4">
+<span class="text-primary font-bold">02</span>
+<span><strong class="text-on-surface">Logging &amp; Observability:</strong> We generate execution logs to allow developers to debug failing endpoints and monitor throughput.</span>
+</li>
+<li class="flex gap-4">
+<span class="text-primary font-bold">03</span>
+<span><strong class="text-on-surface">Proactive Debugging:</strong> Automated systems may analyze error patterns to optimize node performance and suggest configuration fixes.</span>
+</li>
+</ul>
+</div>
+</section>
+<!-- 3. Data Retention -->
+<section class="space-y-6" id="retention">
+<div class="flex items-center gap-4">
+<div class="w-10 h-10 flex items-center justify-center bg-primary-container text-primary rounded-lg border border-outline-variant">
+<span class="material-symbols-outlined">save</span>
+</div>
+<h2 class="text-2xl font-bold tracking-tight">3. Data Retention Policy</h2>
+</div>
+<div class="bg-surface-container-lowest border border-outline-variant p-6 rounded-2xl overflow-hidden relative">
+<div class="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full -mr-16 -mt-16 blur-3xl"></div>
+<table class="w-full text-left">
+<thead>
+<tr class="border-b border-outline-variant text-[10px] font-black uppercase tracking-widest text-primary/60">
+<th class="pb-4">Data Type</th>
+<th class="pb-4">Retention Period</th>
+<th class="pb-4">Storage Logic</th>
+</tr>
+</thead>
+<tbody class="text-[13px] divide-y divide-outline-variant">
+<tr>
+<td class="py-4 text-on-surface font-medium">Activity Logs</td>
+<td class="py-4">14 Days</td>
+<td class="py-4 text-on-surface-variant">Encrypted Hot Storage</td>
+</tr>
+<tr>
+<td class="py-4 text-on-surface font-medium">Webhook Payloads</td>
+<td class="py-4">7 Days</td>
+<td class="py-4 text-on-surface-variant">Ephemeral Cache</td>
+</tr>
+<tr>
+<td class="py-4 text-on-surface font-medium">User Profile</td>
+<td class="py-4">Account Duration</td>
+<td class="py-4 text-on-surface-variant">Persistent Vault</td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<!-- 4. Third-Party Services -->
+<section class="space-y-6" id="integrations">
+<div class="flex items-center gap-4">
+<div class="w-10 h-10 flex items-center justify-center bg-primary-container text-primary rounded-lg border border-outline-variant">
+<span class="material-symbols-outlined">hub</span>
+</div>
+<h2 class="text-2xl font-bold tracking-tight">4. Third-Party Integrations</h2>
+</div>
+<p class="text-on-surface-variant text-[14px]">
+                    Chlorophyll Carbon facilitates data flow to third-party APIs. Specifically, for our <strong class="text-on-surface">LINE Messaging Integration</strong>, we transmit only the necessary notification payload as defined in your workflow schema. We do not sell or trade your data to third parties.
+                </p>
+<div class="p-6 bg-primary/5 rounded-xl border-l-4 border-primary">
+<p class="text-[12px] font-bold uppercase tracking-wider text-primary mb-2">Technical Limitation</p>
+<p class="text-[13px] text-on-surface-variant italic">
+                        Once data is transmitted to an external service (e.g., AWS, LINE, Slack), it becomes subject to that provider's privacy policy. Chlorophyll Carbon maintains no control over data once it leaves our synthetic biosphere.
+                    </p>
+</div>
+</section>
+<!-- 5. User Rights -->
+<section class="space-y-6" id="rights">
+<div class="flex items-center gap-4">
+<div class="w-10 h-10 flex items-center justify-center bg-primary-container text-primary rounded-lg border border-outline-variant">
+<span class="material-symbols-outlined">lock_person</span>
+</div>
+<h2 class="text-2xl font-bold tracking-tight">5. User Rights</h2>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+<div class="space-y-2">
+<h4 class="text-[14px] font-bold text-on-surface">Access &amp; Export</h4>
+<p class="text-[13px] text-on-surface-variant leading-relaxed">Request a full JSON dump of all telemetry and profile data associated with your User ID at any time via the console.</p>
+</div>
+<div class="space-y-2">
+<h4 class="text-[14px] font-bold text-on-surface">Right to Deletion</h4>
+<p class="text-[13px] text-on-surface-variant leading-relaxed">Closing your account triggers an immediate scrub of all persistent storage clusters within 24 hours.</p>
+</div>
+<div class="space-y-2">
+<h4 class="text-[14px] font-bold text-on-surface">Processing Opt-out</h4>
+<p class="text-[13px] text-on-surface-variant leading-relaxed">Disable specific webhook endpoints to stop data collection for specific projects without terminating your account.</p>
+</div>
+<div class="space-y-2">
+<h4 class="text-[14px] font-bold text-on-surface">Security Reporting</h4>
+<p class="text-[13px] text-on-surface-variant leading-relaxed">Report suspected vulnerabilities or data leakage directly to our security response team for immediate investigation.</p>
+</div>
+</div>
+</section>
+<!-- Contact/Footer Note -->
+<div class="pt-12 border-t border-outline-variant">
+<p class="text-[12px] text-on-surface-variant">
+                    Questions regarding our privacy stack? Reach out to <a class="text-primary hover:underline" href="#">security@chlorophyll-carbon.tech</a>
+</p>
+</div>
+</article>
+</main>
+<!-- Footer -->
+<footer class="w-full py-12 px-6 border-t border-[#06c656]/10 bg-[#0f2317]">
+<div class="flex flex-col md:flex-row justify-between items-center gap-4 max-w-7xl mx-auto">
+<div class="flex flex-col items-center md:items-start gap-2">
+<div class="text-[#06c656] font-extrabold uppercase tracking-tighter">Chlorophyll Carbon</div>
+<p class="font-['Inter'] text-[12px] uppercase tracking-wider font-bold text-[#06c656]/40">© 2024 Chlorophyll Carbon. Synthetic Photosynthesis for Webhooks.</p>
+</div>
+<div class="flex gap-8 divide-x divide-[#06c656]/10">
+<div class="flex gap-6 pl-8">
+<a class="font-['Inter'] text-[12px] uppercase tracking-wider font-bold text-[#06c656] hover:underline decoration-[#06c656]/50 transition-opacity duration-300" href="#">Privacy</a>
+<a class="font-['Inter'] text-[12px] uppercase tracking-wider font-bold text-[#06c656]/40 hover:text-[#06c656] hover:underline decoration-[#06c656]/50 transition-opacity duration-300" href="#">Terms</a>
+<a class="font-['Inter'] text-[12px] uppercase tracking-wider font-bold text-[#06c656]/40 hover:text-[#06c656] hover:underline decoration-[#06c656]/50 transition-opacity duration-300" href="#">Security</a>
+<a class="font-['Inter'] text-[12px] uppercase tracking-wider font-bold text-[#06c656]/40 hover:text-[#06c656] hover:underline decoration-[#06c656]/50 transition-opacity duration-300" href="#">GitHub</a>
+</div>
+</div>
+</div>
+</footer>
+</body></html>

@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#06c656",
+                        "background-light": "#f5f8f7",
+                        "background-dark": "#0f2317",
+                    },
+                    fontFamily: {
+                        "display": ["Inter"]
+                    },
+                    borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+                },
+            },
+        }
+    </script>
+<title>LINE Bot Webhook Service - Workspace</title>
+</head>
+<body class="font-display bg-background-light dark:bg-background-dark text-slate-900 dark:text-slate-100 overflow-hidden h-screen flex flex-col">
+<!-- Top Navigation Bar -->
+<header class="flex items-center justify-between border-b border-slate-200 dark:border-primary/20 px-6 py-3 bg-white dark:bg-background-dark shrink-0">
+<div class="flex items-center gap-6">
+<div class="flex items-center gap-3 text-primary">
+<span class="material-symbols-outlined text-3xl">terminal</span>
+<h2 class="text-slate-900 dark:text-slate-100 text-lg font-bold leading-tight tracking-tight">LINE Bot Webhook Service</h2>
+</div>
+<nav class="hidden md:flex items-center gap-6">
+<a class="text-primary text-sm font-semibold border-b-2 border-primary pb-1" href="#">Editor</a>
+<a class="text-slate-500 dark:text-slate-400 text-sm font-medium hover:text-primary transition-colors" href="#">Deployments</a>
+<a class="text-slate-500 dark:text-slate-400 text-sm font-medium hover:text-primary transition-colors" href="#">Settings</a>
+</nav>
+</div>
+<div class="flex items-center gap-4">
+<div class="relative group hidden sm:block">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-lg">search</span>
+<input class="w-64 bg-slate-100 dark:bg-primary/10 border-none rounded-lg py-2 pl-10 pr-4 text-sm focus:ring-1 focus:ring-primary placeholder:text-slate-400" placeholder="Search project files..." type="text"/>
+</div>
+<button class="bg-primary hover:bg-primary/90 text-background-dark px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all">
+<span class="material-symbols-outlined text-sm">cloud_upload</span>
+                Deploy Changes
+            </button>
+<div class="h-8 w-8 rounded-full bg-primary/20 flex items-center justify-center text-primary border border-primary/30 overflow-hidden">
+<img class="w-full h-full object-cover" data-alt="User profile avatar icon" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCpYuwJeTljW_g2TATwDfSfOKaUyUCrHzJYGX5ufcBHST8k-ARVAw0Zt_syLVlPtCbUaRLyXZVUYY1urnMlfsJ7jJOYfyvLgWqeGHbYkhhC_dzhbUGErEnWTeDtEhZRyt4UZatJHt8e-jfqWIKQnLKZNgfV-LMLH3jRNs4da_BUC0LS3SWP7ryIlT6oERTvBz6-1bNvBUrpqGh5unjdH3J_DLCtvEpw2-Ksz0gbTzQYtIOO3jcvlszHm1MKgKryaij9dKTU5Jgm5-Q"/>
+</div>
+</div>
+</header>
+<!-- Main Content Area -->
+<main class="flex flex-1 overflow-hidden">
+<!-- Sidebar: Project Explorer -->
+<aside class="w-64 border-r border-slate-200 dark:border-primary/20 bg-slate-50 dark:bg-background-dark/50 flex flex-col shrink-0">
+<div class="p-4 border-b border-slate-200 dark:border-primary/10">
+<div class="flex items-center justify-between mb-2">
+<p class="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Project Explorer</p>
+<span class="material-symbols-outlined text-sm cursor-pointer hover:text-primary">create_new_folder</span>
+</div>
+<div class="flex items-center gap-2 text-primary font-semibold text-sm">
+<span class="material-symbols-outlined text-lg">folder_open</span>
+                    line-bot-webhook-v1
+                </div>
+</div>
+<div class="flex-1 overflow-y-auto py-2">
+<div class="space-y-1">
+<div class="flex items-center gap-3 px-4 py-1.5 hover:bg-primary/10 cursor-pointer group">
+<span class="material-symbols-outlined text-slate-400 group-hover:text-primary text-lg">expand_more</span>
+<span class="material-symbols-outlined text-primary text-lg">folder</span>
+<span class="text-sm">src</span>
+</div>
+<div class="flex items-center gap-3 px-8 py-1.5 bg-primary/20 border-r-4 border-primary cursor-pointer">
+<span class="material-symbols-outlined text-primary text-lg">javascript</span>
+<span class="text-sm font-medium">index.js</span>
+</div>
+<div class="flex items-center gap-3 px-8 py-1.5 hover:bg-primary/10 cursor-pointer">
+<span class="material-symbols-outlined text-slate-400 text-lg">javascript</span>
+<span class="text-sm">handler.js</span>
+</div>
+<div class="flex items-center gap-3 px-4 py-1.5 hover:bg-primary/10 cursor-pointer group">
+<span class="material-symbols-outlined text-slate-400 group-hover:text-primary text-lg">chevron_right</span>
+<span class="material-symbols-outlined text-slate-400 text-lg">folder</span>
+<span class="text-sm">config</span>
+</div>
+<div class="flex items-center gap-3 px-4 py-1.5 hover:bg-primary/10 cursor-pointer">
+<span class="material-symbols-outlined text-yellow-500 text-lg">settings</span>
+<span class="text-sm">.env</span>
+</div>
+<div class="flex items-center gap-3 px-4 py-1.5 hover:bg-primary/10 cursor-pointer">
+<span class="material-symbols-outlined text-blue-400 text-lg">description</span>
+<span class="text-sm">package.json</span>
+</div>
+</div>
+</div>
+<div class="p-4 bg-primary/5 border-t border-slate-200 dark:border-primary/10">
+<div class="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 mb-2">
+<span>GIT STATUS</span>
+<span class="text-primary">main*</span>
+</div>
+<div class="flex items-center gap-2 text-[10px]">
+<span class="w-2 h-2 rounded-full bg-primary"></span>
+<span>3 files modified</span>
+</div>
+</div>
+</aside>
+<!-- Editor and Logs Area -->
+<section class="flex-1 flex flex-col min-w-0 bg-white dark:bg-background-dark">
+<!-- Webhook URL Header -->
+<div class="bg-primary/10 p-4 border-b border-primary/20 flex flex-wrap items-center justify-between gap-4">
+<div class="flex items-center gap-3">
+<div class="bg-primary/20 p-2 rounded-lg">
+<span class="material-symbols-outlined text-primary">link</span>
+</div>
+<div>
+<p class="text-[10px] font-bold uppercase tracking-widest text-primary/70">Public Webhook URL</p>
+<p class="text-sm font-mono text-slate-700 dark:text-slate-200">https://8a2b-123-45-67-89.ngrok-free.app/callback</p>
+</div>
+</div>
+<div class="flex gap-2">
+<button class="bg-primary/20 hover:bg-primary/30 text-primary px-3 py-1.5 rounded text-xs font-bold transition-colors flex items-center gap-1">
+<span class="material-symbols-outlined text-sm">content_copy</span>
+                        Copy URL
+                    </button>
+<button class="bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 px-3 py-1.5 rounded text-xs font-bold transition-colors flex items-center gap-1">
+<span class="material-symbols-outlined text-sm">refresh</span>
+                        Rotate
+                    </button>
+</div>
+</div>
+<!-- Tab Bar -->
+<div class="flex bg-slate-100 dark:bg-background-dark/80 border-b border-slate-200 dark:border-primary/10 overflow-x-auto">
+<div class="flex items-center gap-2 px-4 py-2 bg-white dark:bg-background-dark border-r border-slate-200 dark:border-primary/20 border-t-2 border-t-primary min-w-[120px]">
+<span class="material-symbols-outlined text-primary text-sm">javascript</span>
+<span class="text-xs font-medium">index.js</span>
+<span class="material-symbols-outlined text-xs ml-auto hover:bg-slate-100 dark:hover:bg-slate-800 rounded cursor-pointer">close</span>
+</div>
+<div class="flex items-center gap-2 px-4 py-2 hover:bg-white/50 dark:hover:bg-white/5 border-r border-slate-200 dark:border-primary/10 min-w-[120px] cursor-pointer">
+<span class="material-symbols-outlined text-slate-400 text-sm">javascript</span>
+<span class="text-xs text-slate-500">handler.js</span>
+</div>
+</div>
+<!-- Mock Code Editor -->
+<div class="flex-1 overflow-auto p-6 font-mono text-sm leading-relaxed bg-white dark:bg-[#0b1a11]">
+<div class="flex gap-4">
+<div class="text-slate-400 text-right select-none opacity-50 pr-4 border-r border-primary/10">
+                        1<br/>2<br/>3<br/>4<br/>5<br/>6<br/>7<br/>8<br/>9<br/>10<br/>11<br/>12<br/>13<br/>14<br/>15<br/>16
+                    </div>
+<div class="flex-1 whitespace-pre">
+<span class="text-purple-400">const</span> line = <span class="text-yellow-400">require</span>(<span class="text-primary">'@line/bot-sdk'</span>);
+<span class="text-purple-400">const</span> express = <span class="text-yellow-400">require</span>(<span class="text-primary">'express'</span>);
+
+<span class="text-purple-400">const</span> config = {
+  channelAccessToken: process.env.CHANNEL_ACCESS_TOKEN,
+  channelSecret: process.env.CHANNEL_SECRET,
+};
+
+<span class="text-purple-400">const</span> app = <span class="text-yellow-400">express</span>();
+
+app.<span class="text-blue-400">post</span>(<span class="text-primary">'/callback'</span>, line.<span class="text-yellow-400">middleware</span>(config), (req, res) =&gt; {
+  Promise.<span class="text-blue-400">all</span>(req.body.events.<span class="text-blue-400">map</span>(handleEvent))
+    .<span class="text-blue-400">then</span>((result) =&gt; res.<span class="text-blue-400">json</span>(result))
+    .<span class="text-blue-400">catch</span>((err) =&gt; {
+      console.<span class="text-blue-400">error</span>(err);
+      res.<span class="text-blue-400">status</span>(<span class="text-orange-400">500</span>).<span class="text-blue-400">end</span>();
+    });
+});</div>
+</div>
+</div>
+<!-- Bottom Panel: Live Logs -->
+<div class="h-48 border-t border-slate-200 dark:border-primary/20 bg-slate-50 dark:bg-background-dark flex flex-col shrink-0">
+<div class="flex items-center justify-between px-4 py-2 border-b border-slate-200 dark:border-primary/10">
+<div class="flex items-center gap-4">
+<p class="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1">
+<span class="material-symbols-outlined text-sm">wysiwyg</span>
+                            Live Logs
+                        </p>
+<div class="flex items-center gap-1.5">
+<span class="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></span>
+<span class="text-[10px] text-primary font-bold uppercase">Streaming</span>
+</div>
+</div>
+<div class="flex items-center gap-3">
+<button class="text-slate-400 hover:text-primary transition-colors">
+<span class="material-symbols-outlined text-sm">not_interested</span>
+</button>
+<button class="text-slate-400 hover:text-primary transition-colors">
+<span class="material-symbols-outlined text-sm">download</span>
+</button>
+</div>
+</div>
+<div class="flex-1 overflow-y-auto p-3 font-mono text-[11px] space-y-1 bg-black/5 dark:bg-black/20">
+<div class="flex gap-3">
+<span class="text-slate-400">[2023-11-20 14:02:11]</span>
+<span class="text-primary font-bold">INFO</span>
+<span class="text-slate-300">Server started on port 3000...</span>
+</div>
+<div class="flex gap-3">
+<span class="text-slate-400">[2023-11-20 14:02:15]</span>
+<span class="text-primary font-bold">INFO</span>
+<span class="text-slate-300">Webhook connected to ngrok tunnel: 8a2b-123-45-67-89</span>
+</div>
+<div class="flex gap-3">
+<span class="text-slate-400">[2023-11-20 14:05:42]</span>
+<span class="text-blue-400 font-bold">POST</span>
+<span class="text-slate-300">/callback 200 OK (UserMessage: "Hello Bot")</span>
+</div>
+<div class="flex gap-3">
+<span class="text-slate-400">[2023-11-20 14:05:43]</span>
+<span class="text-primary font-bold">INFO</span>
+<span class="text-slate-300">Response sent successfully. API Latency: 42ms</span>
+</div>
+<div class="flex gap-3 opacity-50">
+<span class="text-slate-400">[2023-11-20 14:05:55]</span>
+<span class="text-slate-500 font-bold">DEBUG</span>
+<span class="text-slate-500">Middleware validation passed for signature: X-Line-Signature</span>
+</div>
+</div>
+</div>
+</section>
+</main>
+<!-- Footer StatusBar -->
+<footer class="bg-primary text-background-dark px-4 py-1 flex items-center justify-between text-[10px] font-medium shrink-0">
+<div class="flex items-center gap-4">
+<div class="flex items-center gap-1">
+<span class="material-symbols-outlined text-sm">sync_alt</span>
+                Connected
+            </div>
+<div class="flex items-center gap-1">
+<span class="material-symbols-outlined text-sm">terminal</span>
+                Node.js v18.16.0
+            </div>
+</div>
+<div class="flex items-center gap-4">
+<div class="flex items-center gap-1">
+                UTF-8
+            </div>
+<div class="flex items-center gap-1">
+                Spaces: 2
+            </div>
+<div class="flex items-center gap-1">
+                Ln 12, Col 43
+            </div>
+<span class="material-symbols-outlined text-sm">notifications</span>
+</div>
+</footer>
+</body></html>
