@@ -49,8 +49,6 @@ async function main(): Promise<void> {
         throw error;
       }
     }
-  } catch (error) {
-    throw error;
   } finally {
     client.release();
     await pool.end();
