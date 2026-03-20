@@ -2,7 +2,7 @@ import { asc, eq } from 'drizzle-orm';
 import { type NextRequest } from 'next/server';
 import { z } from 'zod';
 
-import { sessions, users, workspaceMembers, workspaces } from '@agentj/contracts';
+import { users, workspaceMembers, workspaces } from '@agentj/contracts';
 
 import { SESSION_COOKIE_NAME, createSession } from '@/lib/auth';
 import { db } from '@/lib/db';

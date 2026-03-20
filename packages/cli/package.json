@@ -8,7 +8,8 @@
   },
   "oclif": {
     "commands": "./dist/commands",
-    "bin": "agentj-cli"
+    "bin": "agentj-cli",
+    "topicSeparator": " "
   },
   "files": [
     "bin",

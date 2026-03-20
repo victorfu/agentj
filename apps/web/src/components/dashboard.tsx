@@ -12,6 +12,7 @@ import {
   KeyRound,
   Loader2,
   LogOut,
+  MessageCircle,
   Network,
   RefreshCw,
   Terminal,
@@ -41,6 +42,17 @@ interface Tunnel {
   targetPort: number;
   createdAt: string;
   updatedAt: string;
+}
+
+interface LineChannel {
+  id: string;
+  tunnelId: string;
+  name: string;
+  lineChannelId: string;
+  mode: 'relay' | 'managed';
+  webhookActive: boolean;
+  webhookUrl: string | null;
+  createdAt: string;
 }
 
 interface CreatedPatResponse {
@@ -114,6 +126,7 @@ function StatusBadge({ status }: { status: Tunnel['status'] }) {
 export function Dashboard() {
   const [pat, setPat] = useState<PatToken | null>(null);
   const [tunnels, setTunnels] = useState<Tunnel[]>([]);
+  const [lineChannels, setLineChannels] = useState<LineChannel[]>([]);
   const [loading, setLoading] = useState(true);
   const [regenerating, setRegenerating] = useState(false);
   const [newToken, setNewToken] = useState<string | null>(null);
@@ -127,7 +140,6 @@ export function Dashboard() {
   }
 
   async function ensurePat(): Promise<PatToken | null> {
-    // Get existing PATs
     const patsRes = await fetch('/api/v1/pats');
     if (patsRes.status === 401) {
       window.location.href = '/login';
@@ -136,11 +148,10 @@ export function Dashboard() {
     if (!patsRes.ok) throw new Error(await patsRes.text());
     const pats = (await patsRes.json()) as PatToken[];
 
-    if (pats.length > 0) {
+    if (pats.length > 0 && pats[0]) {
       return pats[0];
     }
 
-    // Auto-create one PAT for the user
     const createRes = await fetch('/api/v1/pats', { method: 'POST' });
     if (createRes.status === 401) {
       window.location.href = '/login';
@@ -164,12 +175,22 @@ export function Dashboard() {
     try {
       const res = await fetch(`/api/v1/pats/${patId}/tunnels`);
       if (!res.ok) return;
-      const data = (await res.json()) as Tunnel[];
-      setTunnels(data);
+      setTunnels((await res.json()) as Tunnel[]);
     } catch (err) {
-      if (!silent) {
-        toast.error(err instanceof Error ? err.message : 'Failed to load tunnels');
-      }
+      if (!silent) toast.error(err instanceof Error ? err.message : 'Failed to load tunnels');
+    }
+  }
+
+  async function loadLineChannels(patToken: string, silent: boolean) {
+    try {
+      const res = await fetch('/api/v1/line/channels', {
+        headers: { Authorization: `Bearer ${patToken}` }
+      });
+      if (!res.ok) return;
+      setLineChannels((await res.json()) as LineChannel[]);
+    } catch (err) {
+      if (!silent)
+        toast.error(err instanceof Error ? err.message : 'Failed to load LINE channels');
     }
   }
 
@@ -177,10 +198,7 @@ export function Dashboard() {
     if (!pat) return;
     setRegenerating(true);
     try {
-      // Revoke the current PAT
       await fetch(`/api/v1/pats/${pat.id}`, { method: 'DELETE' });
-
-      // Create a new one
       const createRes = await fetch('/api/v1/pats', { method: 'POST' });
       if (!createRes.ok) throw new Error(await createRes.text());
       const created = (await createRes.json()) as CreatedPatResponse;
@@ -196,6 +214,7 @@ export function Dashboard() {
       };
       setPat(newPat);
       setTunnels([]);
+      setLineChannels([]);
       toast.success('PAT regenerated');
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to regenerate PAT');
@@ -219,20 +238,21 @@ export function Dashboard() {
         const currentPat = await ensurePat();
         if (!isCurrent || !currentPat) return;
         setPat(currentPat);
-        await loadTunnels(currentPat.id, false);
+        await Promise.all([
+          loadTunnels(currentPat.id, false),
+          currentPat.token ? loadLineChannels(currentPat.token, false) : Promise.resolve()
+        ]);
       } catch (err) {
-        if (isCurrent) {
+        if (isCurrent)
           toast.error('Failed to load dashboard', {
             description: err instanceof Error ? err.message : 'Unknown error'
           });
-        }
       } finally {
         if (isCurrent) setLoading(false);
       }
     };
 
     void init();
-
     return () => {
       isCurrent = false;
     };
@@ -249,11 +269,12 @@ export function Dashboard() {
 
   const onlineTunnels = tunnels.filter((t) => t.status === 'online');
   const authtokenCommand = newToken
-    ? `npx agentj-cli login ${newToken}`
+    ? `npx agentj-cli authtoken ${newToken}`
     : pat?.token
-      ? `npx agentj-cli login ${pat.token}`
-      : 'npx agentj-cli login <YOUR_PAT>';
+      ? `npx agentj-cli authtoken ${pat.token}`
+      : 'npx agentj-cli authtoken <YOUR_PAT>';
 
+  // Map tunnelId -> tunnel for LINE channel display
   return (
     <main className="max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-8 min-h-screen">
       {/* Header */}
@@ -321,9 +342,7 @@ export function Dashboard() {
                 <span className="text-muted-foreground text-sm font-medium">Total Tunnels</span>
                 <Globe className="size-5 text-primary" />
               </div>
-              <div className="flex items-baseline gap-2">
-                <span className="text-2xl font-bold">{tunnels.length}</span>
-              </div>
+              <span className="text-2xl font-bold">{tunnels.length}</span>
             </div>
             <div className="bg-primary/5 border border-border p-5 rounded-xl">
               <div className="flex items-center justify-between mb-2">
@@ -332,20 +351,19 @@ export function Dashboard() {
               </div>
               <div className="flex items-baseline gap-2">
                 <span className="text-2xl font-bold">{onlineTunnels.length}</span>
-                <span className="text-muted-foreground text-xs font-bold">
-                  {onlineTunnels.length === tunnels.length && tunnels.length > 0
-                    ? 'All online'
-                    : 'Online'}
-                </span>
+                <span className="text-muted-foreground text-xs font-bold">Online</span>
               </div>
             </div>
             <div className="bg-primary/5 border border-border p-5 rounded-xl">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-muted-foreground text-sm font-medium">PAT Status</span>
-                <KeyRound className="size-5 text-primary" />
+                <span className="text-muted-foreground text-sm font-medium">LINE Channels</span>
+                <MessageCircle className="size-5 text-primary" />
               </div>
               <div className="flex items-baseline gap-2">
-                <span className="text-2xl font-bold">{pat ? 'Active' : '—'}</span>
+                <span className="text-2xl font-bold">{lineChannels.length}</span>
+                <span className="text-primary text-xs font-bold">
+                  {lineChannels.filter((c) => c.webhookActive).length} active
+                </span>
               </div>
             </div>
             <div className="bg-primary/5 border border-border p-5 rounded-xl">
@@ -353,9 +371,9 @@ export function Dashboard() {
                 <span className="text-muted-foreground text-sm font-medium">Quick Start</span>
                 <Terminal className="size-5 text-primary" />
               </div>
-              <div className="flex items-baseline gap-2">
-                <code className="text-sm font-mono text-primary truncate">agentj-cli http 8080</code>
-              </div>
+              <code className="text-sm font-mono text-primary truncate">
+                agentj-cli line init 8080
+              </code>
             </div>
           </div>
 
@@ -412,17 +430,19 @@ export function Dashboard() {
                 <div>
                   <p className="text-xs text-muted-foreground mb-1">Set your token:</p>
                   <div className="flex items-center gap-2 bg-muted rounded-md p-3">
-                    <code className="flex-1 overflow-x-auto font-mono text-sm">{authtokenCommand}</code>
+                    <code className="flex-1 overflow-x-auto font-mono text-sm">
+                      {authtokenCommand}
+                    </code>
                     <CopyButton text={authtokenCommand} />
                   </div>
                 </div>
                 <div>
-                  <p className="text-xs text-muted-foreground mb-1">Start a tunnel:</p>
+                  <p className="text-xs text-muted-foreground mb-1">Start a LINE Bot tunnel:</p>
                   <div className="flex items-center gap-2 bg-muted rounded-md p-3">
                     <code className="flex-1 overflow-x-auto font-mono text-sm">
-                      npx agentj-cli http 8080
+                      npx agentj-cli line init 8080
                     </code>
-                    <CopyButton text="npx agentj-cli http 8080" />
+                    <CopyButton text="npx agentj-cli line init 8080" />
                   </div>
                 </div>
               </div>
@@ -430,7 +450,7 @@ export function Dashboard() {
           )}
 
           {/* Active Tunnels Table */}
-          <div className="bg-primary/5 border border-border rounded-xl overflow-hidden">
+          <div className="bg-primary/5 border border-border rounded-xl overflow-hidden mb-8">
             <div className="px-6 py-4 border-b border-border flex items-center justify-between">
               <h3 className="font-bold">Active Tunnels</h3>
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -446,7 +466,7 @@ export function Dashboard() {
                 <p className="text-xs text-muted-foreground">
                   Run{' '}
                   <code className="bg-muted px-1.5 py-0.5 rounded text-primary">
-                    npx agentj-cli http 8080
+                    npx agentj-cli line init 8080
                   </code>{' '}
                   to create your first tunnel.
                 </p>
@@ -455,25 +475,44 @@ export function Dashboard() {
               <>
                 {/* Mobile cards */}
                 <div className="sm:hidden divide-y divide-border">
-                  {tunnels.map((tunnel) => (
-                    <div key={tunnel.id} className="p-4 space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="font-semibold">{tunnel.subdomain}</span>
-                        <StatusBadge status={tunnel.status} />
+                  {tunnels.map((tunnel) => {
+                    const lc = lineChannels.find((c) => c.tunnelId === tunnel.id);
+                    return (
+                      <div key={tunnel.id} className="p-4 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold">{tunnel.subdomain}</span>
+                            {lc && (
+                              <MessageCircle
+                                className="size-3.5 text-primary"
+                                style={{ fill: 'currentColor' }}
+                              />
+                            )}
+                          </div>
+                          <StatusBadge status={tunnel.status} />
+                        </div>
+                        <a
+                          href={tunnel.publicUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="block truncate font-mono text-xs text-primary bg-primary/10 px-2 py-1 rounded hover:underline"
+                        >
+                          {tunnel.publicUrl}
+                        </a>
+                        <p className="font-mono text-xs text-muted-foreground">
+                          {'→'} {tunnel.targetHost}:{tunnel.targetPort}
+                        </p>
+                        {lc && (
+                          <div className="text-xs text-muted-foreground">
+                            LINE: {lc.name} ({lc.mode}){' '}
+                            {lc.webhookActive && (
+                              <span className="text-primary font-bold">Webhook Active</span>
+                            )}
+                          </div>
+                        )}
                       </div>
-                      <a
-                        href={tunnel.publicUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="block truncate font-mono text-xs text-primary bg-primary/10 px-2 py-1 rounded hover:underline"
-                      >
-                        {tunnel.publicUrl}
-                      </a>
-                      <p className="font-mono text-xs text-muted-foreground">
-                        {'→'} {tunnel.targetHost}:{tunnel.targetPort}
-                      </p>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
 
                 {/* Desktop table */}
@@ -481,56 +520,92 @@ export function Dashboard() {
                   <table className="w-full text-left border-collapse">
                     <thead>
                       <tr className="text-xs uppercase tracking-wider text-muted-foreground border-b border-border">
-                        <th className="px-6 py-4 font-semibold">Tunnel Name</th>
+                        <th className="px-6 py-4 font-semibold">Project Name</th>
                         <th className="px-6 py-4 font-semibold">Status</th>
                         <th className="px-6 py-4 font-semibold">Public URL</th>
                         <th className="px-6 py-4 font-semibold">Target</th>
+                        <th className="px-6 py-4 font-semibold">LINE</th>
                         <th className="px-6 py-4 font-semibold text-right">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border">
-                      {tunnels.map((tunnel) => (
-                        <tr
-                          key={tunnel.id}
-                          className="hover:bg-primary/5 transition-colors group"
-                        >
-                          <td className="px-6 py-4">
-                            <div className="flex items-center gap-3">
-                              <div className="w-8 h-8 rounded bg-primary/20 flex items-center justify-center text-primary">
-                                <Globe className="size-4" />
+                      {tunnels.map((tunnel) => {
+                        const lc = lineChannels.find((c) => c.tunnelId === tunnel.id);
+                        return (
+                          <tr
+                            key={tunnel.id}
+                            className="hover:bg-primary/5 transition-colors group"
+                          >
+                            <td className="px-6 py-4">
+                              <div className="flex items-center gap-3">
+                                <div className="w-8 h-8 rounded bg-primary/20 flex items-center justify-center text-primary">
+                                  {lc ? (
+                                    <MessageCircle
+                                      className="size-4"
+                                      style={{ fill: 'currentColor' }}
+                                    />
+                                  ) : (
+                                    <Globe className="size-4" />
+                                  )}
+                                </div>
+                                <div>
+                                  <span className="font-semibold">{tunnel.subdomain}</span>
+                                  {lc && (
+                                    <p className="text-xs text-muted-foreground">{lc.name}</p>
+                                  )}
+                                </div>
                               </div>
-                              <span className="font-semibold">{tunnel.subdomain}</span>
-                            </div>
-                          </td>
-                          <td className="px-6 py-4">
-                            <StatusBadge status={tunnel.status} />
-                          </td>
-                          <td className="px-6 py-4">
-                            <a
-                              href={tunnel.publicUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1.5 font-mono text-sm text-primary/80 bg-primary/10 px-2 py-1 rounded hover:underline"
-                            >
-                              {tunnel.publicUrl}
-                              <ExternalLink className="size-3 shrink-0 opacity-0 group-hover:opacity-100 transition" />
-                            </a>
-                          </td>
-                          <td className="px-6 py-4 font-mono text-sm text-muted-foreground">
-                            {tunnel.targetHost}:{tunnel.targetPort}
-                          </td>
-                          <td className="px-6 py-4 text-right">
-                            <a
-                              href={tunnel.publicUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-primary hover:underline text-sm font-bold"
-                            >
-                              Open
-                            </a>
-                          </td>
-                        </tr>
-                      ))}
+                            </td>
+                            <td className="px-6 py-4">
+                              <StatusBadge status={tunnel.status} />
+                            </td>
+                            <td className="px-6 py-4">
+                              <a
+                                href={tunnel.publicUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1.5 font-mono text-sm text-primary/80 bg-primary/10 px-2 py-1 rounded hover:underline"
+                              >
+                                {tunnel.publicUrl}
+                                <ExternalLink className="size-3 shrink-0 opacity-0 group-hover:opacity-100 transition" />
+                              </a>
+                            </td>
+                            <td className="px-6 py-4 font-mono text-sm text-muted-foreground">
+                              {tunnel.targetHost}:{tunnel.targetPort}
+                            </td>
+                            <td className="px-6 py-4">
+                              {lc ? (
+                                <div className="space-y-1">
+                                  <span className="text-xs font-bold text-primary capitalize">
+                                    {lc.mode}
+                                  </span>
+                                  {lc.webhookActive ? (
+                                    <span className="block text-[10px] text-primary font-bold uppercase tracking-wider">
+                                      Webhook Active
+                                    </span>
+                                  ) : (
+                                    <span className="block text-[10px] text-muted-foreground uppercase tracking-wider">
+                                      Webhook Inactive
+                                    </span>
+                                  )}
+                                </div>
+                              ) : (
+                                <span className="text-xs text-muted-foreground">—</span>
+                              )}
+                            </td>
+                            <td className="px-6 py-4 text-right">
+                              <a
+                                href={tunnel.publicUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-primary hover:underline text-sm font-bold"
+                              >
+                                Open
+                              </a>
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -545,7 +620,7 @@ export function Dashboard() {
           </div>
 
           {/* System Status Footer */}
-          <div className="mt-12 p-6 border border-border rounded-xl bg-primary/5 flex flex-col md:flex-row items-center justify-between gap-6">
+          <div className="p-6 border border-border rounded-xl bg-primary/5 flex flex-col md:flex-row items-center justify-between gap-6">
             <div className="flex items-center gap-4">
               <div>
                 <p className="text-sm font-bold">Global System Status</p>
