@@ -184,12 +184,12 @@ export function TunnelsPage() {
         <div className="flex items-center gap-2">
           <ThemeToggle />
           <Button variant="outline" size="icon-sm" asChild className="sm:hidden">
-            <Link href="/">
+            <Link href="/console">
               <KeyRound className="size-4" />
             </Link>
           </Button>
           <Button variant="outline" size="sm" asChild className="hidden sm:inline-flex">
-            <Link href="/">
+            <Link href="/console">
               <KeyRound className="size-4" />
               PATs
             </Link>

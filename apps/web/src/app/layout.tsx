@@ -5,7 +5,7 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import './styles.css';
 
 export const viewport: Viewport = {
-  themeColor: '#080c16'
+  themeColor: '#0f2317'
 };
 
 export const metadata: Metadata = {

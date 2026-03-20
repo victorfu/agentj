@@ -11,6 +11,7 @@ import {
   Globe,
   KeyRound,
   Loader2,
+  LogOut,
   Terminal
 } from 'lucide-react';
 
@@ -120,6 +121,14 @@ export function Dashboard() {
   const [newlyCreatedToken, setNewlyCreatedToken] = useState<string | null>(null);
   const [creatingPat, setCreatingPat] = useState(false);
   const [revokingPatId, setRevokingPatId] = useState<string | null>(null);
+
+  async function handleLogout() {
+    try {
+      await fetch('/api/v1/auth/logout', { method: 'POST' });
+    } finally {
+      window.location.href = '/login';
+    }
+  }
 
   useEffect(() => {
     setLoadingPats(true);
@@ -252,6 +261,23 @@ export function Dashboard() {
               API Docs
               <ExternalLink />
             </a>
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className="text-muted-foreground hover:text-destructive sm:hidden"
+            onClick={() => void handleLogout()}
+          >
+            <LogOut className="size-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="hidden text-muted-foreground hover:text-destructive sm:inline-flex"
+            onClick={() => void handleLogout()}
+          >
+            <LogOut className="size-4" />
+            Logout
           </Button>
         </div>
       </header>

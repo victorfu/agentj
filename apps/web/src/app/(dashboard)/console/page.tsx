@@ -1,5 +1,5 @@
 import { Dashboard } from '@/components/dashboard';
 
-export default function HomePage() {
+export default function ConsolePage() {
   return <Dashboard />;
 }
