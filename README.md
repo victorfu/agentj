@@ -94,11 +94,42 @@ Web Dashboard 的 **PATs** 區塊可查看/產生/撤銷 PAT。
 
 ## LINE Bot 快速流程
 
-CLI 一鍵初始化 LINE webhook 託管（建立 tunnel + 設定 channel + sync/test webhook + 啟動 agent）：
+### 首次設定
+
+一鍵初始化 LINE webhook 託管（建立 tunnel + 設定 channel + sync/test webhook + 啟動 agent）：
 
 ```sh
-pnpm run cli line init 8080
+agentj line init 8080
 ```
+
+### 重新連線
+
+使用既有 channel 重新連線，不需重新輸入憑證：
+
+```sh
+agentj line connect                    # 自動選擇（僅一個 channel 時）
+agentj line connect line-pga559f7      # 指定 channel name
+agentj line connect 1653935138         # 指定 LINE Channel ID
+agentj line connect line-pga559f7 3000 # 覆寫本地 port
+```
+
+### 查看狀態
+
+```sh
+agentj line status                     # 列出所有 channels
+agentj line status line-pga559f7       # 查看特定 channel 詳情
+```
+
+### 手動同步 Webhook
+
+通常 `line connect` 會自動同步，手動同步可用：
+
+```sh
+agentj line webhook sync               # 自動選擇 channel
+agentj line webhook sync line-pga559f7  # 指定 channel
+```
+
+> 所有 LINE 子指令皆接受 channel name、LINE Channel ID、或內部 ID 作為識別。
 
 ## OpenAPI / Swagger 更新
 

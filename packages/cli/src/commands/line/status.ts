@@ -2,6 +2,7 @@ import { Args, Command, Flags } from '@oclif/core';
 
 import { loadApiClient } from '../../lib/client.js';
 import { Column, formatTable } from '../../lib/format.js';
+import { resolveLineChannel } from '../../lib/line-channel-resolver.js';
 import { ensureLoggedIn } from '../../lib/project.js';
 
 import type { LineChannel } from '@agentj/contracts';
@@ -23,7 +24,10 @@ export default class LineStatus extends Command {
   static aliases = ['line:status'];
 
   static args = {
-    channelId: Args.string({ required: false, description: 'LINE channel id' })
+    channel: Args.string({
+      required: false,
+      description: 'Channel name, LINE Channel ID, or internal ID'
+    })
   };
 
   static flags = {
@@ -35,10 +39,11 @@ export default class LineStatus extends Command {
     const client = await loadApiClient();
     ensureLoggedIn(client);
 
-    if (args.channelId) {
+    if (args.channel) {
+      const resolved = await resolveLineChannel(client, args.channel);
       const [channel, webhook] = await Promise.all([
-        client.getLineChannel(args.channelId),
-        client.getLineWebhook(args.channelId)
+        client.getLineChannel(resolved.id),
+        client.getLineWebhook(resolved.id)
       ]);
 
       if (flags.json) {

@@ -4,6 +4,7 @@ import { Args, Command, Flags } from '@oclif/core';
 import { ux } from '@oclif/core';
 
 import { loadApiClient } from '../../lib/client.js';
+import { resolveLineChannel } from '../../lib/line-channel-resolver.js';
 import { ensureLoggedIn } from '../../lib/project.js';
 
 export default class LineSend extends Command {
@@ -12,7 +13,10 @@ export default class LineSend extends Command {
   static aliases = ['line:send'];
 
   static args = {
-    channelId: Args.string({ required: true, description: 'LINE channel id' }),
+    channel: Args.string({
+      required: true,
+      description: 'Channel name, LINE Channel ID, or internal ID'
+    }),
     type: Args.string({
       required: true,
       description: 'Message type: reply | push | multicast | broadcast',
@@ -31,21 +35,22 @@ export default class LineSend extends Command {
     const client = await loadApiClient();
     ensureLoggedIn(client);
 
+    const channel = await resolveLineChannel(client, args.channel);
     const body = await this.resolveBody(flags.body, flags.bodyFile);
 
     let response;
     switch (args.type) {
       case 'reply':
-        response = await client.lineReply(args.channelId, body);
+        response = await client.lineReply(channel.id, body);
         break;
       case 'push':
-        response = await client.linePush(args.channelId, body);
+        response = await client.linePush(channel.id, body);
         break;
       case 'multicast':
-        response = await client.lineMulticast(args.channelId, body);
+        response = await client.lineMulticast(channel.id, body);
         break;
       case 'broadcast':
-        response = await client.lineBroadcast(args.channelId, body);
+        response = await client.lineBroadcast(channel.id, body);
         break;
       default:
         throw new Error(`Unsupported message type: ${args.type}`);
