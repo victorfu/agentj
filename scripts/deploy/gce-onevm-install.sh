@@ -118,13 +118,22 @@ elif ! command -v sudo >/dev/null 2>&1; then
 fi
 
 if [[ "$INSTALL_DOCKER" -eq 1 ]]; then
-  log "Installing Docker and Compose plugin (Ubuntu/Debian via apt)"
+  log "Installing Docker and Compose plugin via Docker official repo"
   if ! command -v apt-get >/dev/null 2>&1; then
     die "apt-get not found. Re-run with --skip-docker-install and install Docker manually."
   fi
 
   "${SUDO_CMD[@]}" apt-get update
-  "${SUDO_CMD[@]}" apt-get install -y docker.io docker-compose-plugin
+  "${SUDO_CMD[@]}" apt-get install -y ca-certificates curl
+  "${SUDO_CMD[@]}" install -m 0755 -d /etc/apt/keyrings
+  "${SUDO_CMD[@]}" curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+  "${SUDO_CMD[@]}" chmod a+r /etc/apt/keyrings/docker.asc
+  echo \
+    "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu \
+    $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
+    "${SUDO_CMD[@]}" tee /etc/apt/sources.list.d/docker.list > /dev/null
+  "${SUDO_CMD[@]}" apt-get update
+  "${SUDO_CMD[@]}" apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
   "${SUDO_CMD[@]}" systemctl enable docker
   "${SUDO_CMD[@]}" systemctl start docker
 fi
