@@ -9,6 +9,7 @@ export default defineConfig({
     'commands/tunnel/ls': 'src/commands/tunnel/ls.ts',
     'commands/tunnel/stop': 'src/commands/tunnel/stop.ts',
     'commands/line/init': 'src/commands/line/init.ts',
+    'commands/line/connect': 'src/commands/line/connect.ts',
     'commands/line/status': 'src/commands/line/status.ts',
     'commands/line/send': 'src/commands/line/send.ts',
     'commands/line/webhook/sync': 'src/commands/line/webhook/sync.ts'

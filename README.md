@@ -1,8 +1,193 @@
-# Agentj
+# AgentJ
 
-Agentj 是一個 pnpm monorepo，用來跑本地 tunneling 平台，包含 Web dashboard、tunnel gateway 與 CLI。
+[AgentJ](https://aj.savy.tw) 是一個 tunnel 服務，讓你將本地 HTTP server 暴露到公開網址，並提供 LINE Bot webhook 一鍵託管。
 
-## 專案結構
+適用情境：
+
+- 本地開發時需要公開 HTTPS 網址（給第三方 webhook 回呼）
+- 快速建立 LINE Bot 並自動設定 webhook
+- 不想自己管 ngrok / Cloudflare Tunnel 等服務
+
+---
+
+## 安裝
+
+```sh
+npm install -g agentj-cli
+```
+
+或直接使用 npx：
+
+```sh
+npx agentj-cli <command>
+```
+
+---
+
+## CLI 使用教學
+
+### 1. 登入
+
+從 [AgentJ Dashboard](https://aj.savy.tw) 登入後，進入個人設定頁面取得 **Personal Access Token（PAT）**，然後在終端機執行：
+
+```sh
+agentj login <your-PAT>
+agentj whoami              # 確認登入成功
+```
+
+### 2. 開啟 Tunnel
+
+將本地 port 暴露到公開 HTTPS 網址：
+
+```sh
+agentj http 8080
+# Tunnel: tun_xxxx
+# Forwarding: https://abc123.tunnel.savy.tw -> http://127.0.0.1:8080
+```
+
+打開輸出的網址，即可從外部存取你本地的服務。
+
+### 3. 管理 Tunnel
+
+```sh
+agentj tunnel ls           # 列出所有 tunnels
+agentj tunnel stop <id>    # 停止 tunnel
+agentj logs <id> --follow  # 即時查看請求 logs
+```
+
+---
+
+## LINE Bot 整合
+
+AgentJ 可以一鍵完成 LINE Bot 的 webhook 設定，省去手動到 LINE Developers Console 貼 webhook URL 的步驟。
+
+### 事前準備：從 LINE Developers Console 取得 Bot 資訊
+
+你需要取得三個值：**Channel ID**、**Channel Secret**、**Channel Access Token**。
+
+#### Step 1：登入 LINE Developers Console
+
+前往 [LINE Developers Console](https://developers.line.biz/console/) 並登入你的 LINE 帳號。
+
+#### Step 2：建立 Provider
+
+如果你還沒有 Provider：
+
+1. 點擊首頁的 **Create** 按鈕
+2. 輸入 Provider 名稱（例如你的公司名或專案名）
+3. 點擊 **Create**
+
+如果已有 Provider，直接點擊進入。
+
+#### Step 3：建立 Messaging API Channel
+
+1. 在 Provider 頁面點擊 **Create a new channel**
+2. 選擇 **Messaging API**
+3. 填寫必要資訊：
+   - **Channel name**：Bot 的顯示名稱
+   - **Channel description**：Bot 的描述
+   - **Category** / **Subcategory**：選擇與你的服務最相關的分類
+4. 勾選同意條款，點擊 **Create**
+
+#### Step 4：取得 Channel ID 和 Channel Secret
+
+1. 進入剛建立的 Channel 頁面
+2. 切換到 **Basic settings** 頁籤
+3. 找到並複製以下兩個值：
+
+| 欄位               | 位置                                        |
+| ------------------ | ------------------------------------------- |
+| **Channel ID**     | Basic settings 頁面上方，一串數字           |
+| **Channel Secret** | Basic settings 頁面中段，點擊眼睛圖示可顯示 |
+
+#### Step 5：取得 Channel Access Token
+
+1. 切換到 **Messaging API** 頁籤
+2. 捲到最下方找到 **Channel access token (long-lived)**
+3. 點擊 **Issue** 按鈕產生 token
+4. 複製產生的 token（這串很長，請完整複製）
+
+> 注意：Channel Access Token 產生後請妥善保存。如果遺失可以重新 Issue，但舊的 token 會失效。
+
+### 首次設定
+
+取得上述三個值後，一鍵建立 tunnel + 設定 LINE channel + 同步 webhook + 啟動連線：
+
+```sh
+agentj line init 8080
+```
+
+CLI 會依序詢問 Channel ID、Channel Secret、Channel Access Token，設定完成後自動開始轉發。
+
+### 重新連線
+
+下次啟動時不需重新輸入憑證，直接連線：
+
+```sh
+agentj line connect                    # 自動選擇（僅一個 channel 時）
+agentj line connect my-channel         # 指定 channel name
+agentj line connect 1653935138         # 指定 LINE Channel ID
+agentj line connect my-channel 3000    # 覆寫本地 port
+```
+
+### 查看狀態
+
+```sh
+agentj line status                     # 列出所有 channels
+agentj line status my-channel          # 查看特定 channel 詳情
+```
+
+### 同步 Webhook
+
+`line connect` 預設會自動同步 webhook。需要手動同步時：
+
+```sh
+agentj line webhook sync               # 自動選擇 channel
+agentj line webhook sync my-channel    # 指定 channel
+```
+
+### 發送訊息
+
+透過 control plane 發送 LINE 訊息（不需經過 tunnel）：
+
+```sh
+agentj line send my-channel push --body '{"to":"USER_ID","messages":[{"type":"text","text":"Hello!"}]}'
+agentj line send my-channel broadcast --body '{"messages":[{"type":"text","text":"Hi everyone!"}]}'
+```
+
+支援的訊息類型：`reply`、`push`、`multicast`、`broadcast`。
+
+> 所有 LINE 子指令皆接受 channel name、LINE Channel ID、或內部 ID 作為識別。
+
+---
+
+## 範例：LINE Echo Bot
+
+`examples/line-echo-bot` 是一個最小的 LINE Echo Bot，收到文字訊息後原樣回覆。
+
+```sh
+cd examples/line-echo-bot
+cp .env.example .env
+# 填入 LINE_CHANNEL_SECRET 和 LINE_CHANNEL_ACCESS_TOKEN
+npm install
+npm run dev                # 啟動在 port 3000
+```
+
+另開終端機：
+
+```sh
+agentj line init 3000     # 首次設定
+# 或
+agentj line connect       # 之後重新連線
+```
+
+---
+
+## 開發
+
+以下為本地開發 AgentJ 平台本身的說明，適用於貢獻者。
+
+### 專案結構
 
 - `apps/web`: Next.js dashboard + API routes
 - `apps/tunnel-gateway`: Fastify + WebSocket gateway（給 tunnel agents）
@@ -11,13 +196,13 @@ Agentj 是一個 pnpm monorepo，用來跑本地 tunneling 平台，包含 Web d
 - `packages/sdk`: CLI 使用的 client SDK
 - `infra/docker`: 本地 Docker Compose 與 DB-first 流程設定
 
-## 先決條件
+### 先決條件
 
 - Node.js 22 LTS
 - pnpm 10+
 - PostgreSQL 16+
 
-## QUICKSTART
+### 本地環境設定
 
 1. 複製環境變數：
 
@@ -26,7 +211,7 @@ cp .env.example .env
 cp apps/web/.env.example apps/web/.env.local
 ```
 
-`apps/web` 使用 Next.js 慣例的 `apps/web/.env.local`。  
+`apps/web` 使用 Next.js 慣例的 `apps/web/.env.local`。
 根目錄 `.env` 提供 contracts / tunnel-gateway / CLI。
 
 2. 安裝依賴：
@@ -35,7 +220,7 @@ cp apps/web/.env.example apps/web/.env.local
 pnpm install
 ```
 
-3. 啟動 PostgreSQL（必要）並初始化資料庫：
+3. 啟動 PostgreSQL 並初始化資料庫：
 
 ```sh
 pnpm db:docker:up
@@ -43,16 +228,13 @@ pnpm db:migrate
 pnpm db:seed
 ```
 
-`db:seed` 只會建立預設 dev user（`dev@agentj.local`），不會設定密碼也不會預先建立 PAT。
-登入前需要先設定密碼：
+`db:seed` 建立預設 dev user（`dev@agentj.local`），登入前需先設定密碼：
 
 ```sh
 pnpm --filter @agentj/contracts db:reset-password -- <email> <new-password>
 ```
 
-PAT 請從 Web Dashboard 產生。
-
-4. 分別啟動服務：
+4. 啟動服務：
 
 ```sh
 pnpm dev:web
@@ -61,199 +243,93 @@ pnpm dev:gateway
 pnpm dev:app
 ```
 
-5. 開啟 Dashboard 並登入或註冊帳號：
+5. 開啟 `http://localhost:3000/login` 登入，從 Dashboard 產生 PAT。
 
-`http://localhost:3000/login`
-
-使用 seed user 登入（需先執行上方 `db:reset-password` 設定密碼），或直接在登入頁註冊新帳號。
-
-6. 產生 PAT 並設定 CLI：
-
-   1. 登入 Web Dashboard (`http://localhost:3000`)，進入 **PATs** 區塊，點擊產生新的 Personal Access Token（PAT）。
-   2. Build CLI 並儲存 token：
-
-   ```sh
-   pnpm run build:cli
-   pnpm run cli login --token <your-PAT>   # 或 pnpm run cli login <your-PAT>
-   ```
-
-   Token 會存到 `~/.agentj/config-dev.yml`（Dev 模式）。
-
-   3. 驗證身份與開啟 tunnel：
-
-   ```sh
-   pnpm run cli whoami                     # 確認 token 有效
-   pnpm run cli http 8080                  # 開啟 tunnel
-   ```
-
-`pnpm run cli` 會自動載入 `.env`（指向 localhost），與 production 環境隔離。
-
-Web Dashboard 的 **PATs** 區塊可查看/產生/撤銷 PAT。
-`http` 命令會自動建立 tunnel，不需要額外資源參數。
-本機直接跑 `web + gateway`（未經 Caddy）時，公開網址預設為 `http://<subdomain>.tunnel.localhost:4000`。
-
-## LINE Bot 快速流程
-
-### 首次設定
-
-一鍵初始化 LINE webhook 託管（建立 tunnel + 設定 channel + sync/test webhook + 啟動 agent）：
+6. Build CLI 並登入：
 
 ```sh
-agentj line init 8080
+pnpm run build:cli
+pnpm run cli login --token <your-PAT>
+pnpm run cli whoami
+pnpm run cli http 8080
 ```
 
-### 重新連線
+### Dev vs Production CLI
 
-使用既有 channel 重新連線，不需重新輸入憑證：
+| 模式       | 指令             | Config 路徑                | 連到       |
+| ---------- | ---------------- | -------------------------- | ---------- |
+| Dev        | `pnpm run cli`   | `~/.agentj/config-dev.yml` | localhost  |
+| Production | `npx agentj-cli` | `~/.agentj/config.yml`     | aj.savy.tw |
 
-```sh
-agentj line connect                    # 自動選擇（僅一個 channel 時）
-agentj line connect line-pga559f7      # 指定 channel name
-agentj line connect 1653935138         # 指定 LINE Channel ID
-agentj line connect line-pga559f7 3000 # 覆寫本地 port
-```
+Dev 模式透過 `.env` 中的環境變數覆蓋預設值，與 production 完全隔離。
 
-### 查看狀態
+### 存取網址
 
-```sh
-agentj line status                     # 列出所有 channels
-agentj line status line-pga559f7       # 查看特定 channel 詳情
-```
+- Dashboard: `http://localhost:3000`
+- Control API: `http://localhost:3000/api/v1`
+- Gateway WS: `ws://localhost:4000/agent/v1/connect`
+- Tunnel 公開網址: `http://<subdomain>.tunnel.localhost:4000`
 
-### 手動同步 Webhook
+### OpenAPI / Swagger 更新
 
-通常 `line connect` 會自動同步，手動同步可用：
-
-```sh
-agentj line webhook sync               # 自動選擇 channel
-agentj line webhook sync line-pga559f7  # 指定 channel
-```
-
-> 所有 LINE 子指令皆接受 channel name、LINE Channel ID、或內部 ID 作為識別。
-
-## OpenAPI / Swagger 更新
-
-修改 `packages/contracts/src/api/openapi.json` 後，Swagger 不會直接讀 source 檔，而是讀 `@agentj/contracts` build 後的輸出。
-
-請在修改後執行：
+修改 `packages/contracts/src/api/openapi.json` 後執行：
 
 ```sh
 pnpm --filter @agentj/contracts build
 ```
 
-若 `apps/web` dev server 已在跑，重啟一次並重新整理 `/docs`（建議 hard refresh）。
+若 dev server 已在跑，重啟並 hard refresh `/docs`。
 
-## Tunnel 404 troubleshooting
+### Tunnel 404 Troubleshooting
 
-`http://<subdomain>.tunnel.localhost:4000` 在本機直跑模式是有效網址。  
-如果遇到 404，先用 CLI logs 判斷 404 來源：
+先用 CLI logs 判斷 404 來源：
 
 ```sh
 pnpm run cli logs <tunnelId> --follow
 ```
 
-- Gateway 回 `TUNNEL_NOT_FOUND`（或沒有看到請求）：
-  - 檢查 `web` 與 `gateway` 是否連到同一個 `DATABASE_URL`
-  - 檢查 `AGENTJ_TUNNEL_BASE_DOMAIN` 是否一致（都應為 `tunnel.localhost`）
-  - 檢查 `AGENTJ_CONNECT_TOKEN_SECRET` 與 `AGENTJ_GATEWAY_WS_PUBLIC_URL` 是否一致
-- Agent 連線被關閉 `4408`（hello timeout）：
-  - 檢查 agent 是否有在連線後立即送出 `agent_hello`
-  - 需要時可調整 `AGENTJ_AGENT_HELLO_TIMEOUT_MS`（預設 `10000`）
-- Agent 連線被關閉 `4411`（heartbeat timeout）：
-  - 檢查網路品質與是否有封包丟失導致 `pong` 回覆中斷
-  - 可調整 `AGENTJ_AGENT_PING_INTERVAL_MS`、`AGENTJ_AGENT_MAX_MISSED_PONGS`
-  - 高負載時可調整 `AGENTJ_WS_SEND_HIGH_WATERMARK_BYTES`
-- Ingress 回 `TUNNEL_RECONNECTING`（HTTP 503）：
-  - 代表 agent 剛斷線且仍在重連寬限期
-  - 可調整 `AGENTJ_AGENT_RECONNECT_GRACE_MS`（預設 `5000`）
-- Ingress 回 `TUNNEL_BUSY`（HTTP 503）或 Public WS close `4429`：
-  - 代表 tunnel 正在被過多併發請求打滿，gateway 啟用保護機制
-  - 可調整 `AGENTJ_MAX_ACTIVE_STREAMS_PER_TUNNEL`（預設 `128`）
-  - 可調整 `AGENTJ_MAX_ACTIVE_STREAMS_GLOBAL`（預設 `4096`）
-- Tunnel logs 顯示請求狀態 `404`：
-  - 代表請求已到上游 app，404 來自 `:8080` 的路由本身（不是 tunnel domain 問題）
+- `TUNNEL_NOT_FOUND`：檢查 `DATABASE_URL`、`AGENTJ_TUNNEL_BASE_DOMAIN`、`AGENTJ_CONNECT_TOKEN_SECRET` 是否一致
+- Close `4408`（hello timeout）：agent 沒有及時送出 `agent_hello`，可調整 `AGENTJ_AGENT_HELLO_TIMEOUT_MS`
+- Close `4411`（heartbeat timeout）：可調整 `AGENTJ_AGENT_PING_INTERVAL_MS`、`AGENTJ_AGENT_MAX_MISSED_PONGS`
+- `TUNNEL_RECONNECTING`（503）：agent 斷線重連中，可調整 `AGENTJ_AGENT_RECONNECT_GRACE_MS`
+- `TUNNEL_BUSY`（503）：併發請求過多，可調整 `AGENTJ_MAX_ACTIVE_STREAMS_PER_TUNNEL`
+- 請求狀態 `404`：404 來自本地 app 路由，非 tunnel 問題
 
-## Docker（Database-first）
-
-只啟動 PostgreSQL：
+### Docker（Database-first）
 
 ```sh
-pnpm db:docker:up
-```
+pnpm db:docker:up           # 啟動 PostgreSQL
+pnpm db:docker:bootstrap    # 初始化 schema + seed
 
-初始化 schema + seed：
-
-```sh
-pnpm db:docker:bootstrap
-```
-
-重建 DB（含 volume）：
-
-```sh
+# 重建 DB
 pnpm db:docker:reset
 pnpm db:docker:up
 pnpm db:docker:bootstrap
 ```
 
-## CLI 發佈到 npm
-
-CLI 以 `agentj-cli` 發佈到 npm，使用 tsup 將 `@agentj/contracts` 和 `@agentj/sdk` 打包成單一 bundle。
+### CLI 發佈到 npm
 
 ```sh
 cd packages/cli
-npm version patch          # 更新版本號（patch / minor / major）
-npm publish                # prepublishOnly 會自動跑 tsup
+npm version patch
+npm publish
 ```
 
-使用者安裝後可直接使用：
+### Production Deployment (GCP)
+
+- 完整流程：[`docs/deployment-gcp-production.md`](docs/deployment-gcp-production.md)
+- 一鍵安裝：`bash scripts/deploy/gce-onevm-install.sh --help`
+
+重新部署：
 
 ```sh
-npx agentj-cli login
-npx agentj-cli http 8080
-```
-
-### Dev vs Production CLI
-
-| 模式       | 指令             | Config 路徑                | 連到            |
-| ---------- | ---------------- | -------------------------- | --------------- |
-| Dev        | `pnpm run cli`   | `~/.agentj/config-dev.yml` | localhost       |
-| Production | `npx agentj-cli` | `~/.agentj/config.yml`     | app.example.com |
-
-Dev 模式透過 `.env` 中的環境變數覆蓋預設值（API URL、gateway URL、config file path），與 production 完全隔離。
-
-## 存取網址
-
-- Dashboard: `http://localhost:3000`
-- Control API base: `http://localhost:3000/api/v1`
-- Gateway WS endpoint: `ws://localhost:4000/agent/v1/connect`
-- Tunnel 公開網址: `http://<subdomain>.tunnel.localhost:4000`
-
-## Production Deployment (GCP)
-
-- 完整流程與範本：[`docs/deployment-gcp-production.md`](docs/deployment-gcp-production.md)
-- MVP 一鍵安裝腳本：`bash scripts/deploy/gce-onevm-install.sh --help`
-
-### 重新部署
-
-```sh
-# 1. 本地 commit + push
-git add -A && git commit -m "your message"
 git push
-
-# 2. SSH 到 VM
 ssh <user>@<vm-ip>
-cd agentj
-git pull
-
-# 3. 重新 build + restart（跳過 Docker 安裝）
+cd agentj && git pull
 bash scripts/deploy/gce-onevm-install.sh \
-  --app-domain app.example.com \
-  --gateway-domain gateway.example.com \
-  --tunnel-base-domain tunnel.example.com \
+  --app-domain aj.savy.tw \
+  --gateway-domain gateway.savy.tw \
+  --tunnel-base-domain tunnel.savy.tw \
   --connect-token-secret <your-secret> \
   --skip-docker-install
 ```
-
-## 其他文件
-
-- Docker 細節：`infra/docker/README.md`
