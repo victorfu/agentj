@@ -262,10 +262,10 @@ export function Dashboard() {
 
   const onlineTunnels = tunnels.filter((t) => t.status === 'online');
   const authtokenCommand = newToken
-    ? `npx agentj-cli authtoken ${newToken}`
+    ? `npx agentj-cli login ${newToken}`
     : pat?.token
-      ? `npx agentj-cli authtoken ${pat.token}`
-      : 'npx agentj-cli authtoken <YOUR_PAT>';
+      ? `npx agentj-cli login ${pat.token}`
+      : 'npx agentj-cli login <YOUR_PAT>';
 
   // Map tunnelId -> tunnel for LINE channel display
   return (

@@ -1,7 +1,7 @@
 import { and, eq, isNull } from 'drizzle-orm';
 import { type NextRequest, NextResponse } from 'next/server';
 
-import { patTokens } from '@agentj/contracts';
+import { patTokens, tunnels } from '@agentj/contracts';
 
 import { requireSessionAuth } from '@/lib/auth';
 import { db } from '@/lib/db';
@@ -36,6 +36,8 @@ export async function DELETE(
   if (!updated) {
     return jsonError('NOT_FOUND', 'PAT not found or already revoked', 404);
   }
+
+  await db.delete(tunnels).where(eq(tunnels.patTokenId, patId));
 
   return new NextResponse(null, {
     status: 204,
