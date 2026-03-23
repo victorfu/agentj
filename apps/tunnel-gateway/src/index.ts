@@ -144,14 +144,13 @@ function runSafely(promise: Promise<unknown>, context: string): void {
 }
 
 function splitPathAndQuery(url: string): { path: string; query: string } {
-  if (!url.includes('?')) {
+  const idx = url.indexOf('?');
+  if (idx === -1) {
     return { path: url, query: '' };
   }
-
-  const [path, query] = url.split('?');
   return {
-    path: path ?? '/',
-    query: query ?? ''
+    path: url.slice(0, idx) || '/',
+    query: url.slice(idx + 1)
   };
 }
 
@@ -1054,6 +1053,8 @@ async function handlePublicWebsocket(
   trackStreamBySession(state);
   armStreamTimeout(state);
 
+  const { path: wsPath, query: wsQuery } = splitPathAndQuery(request.url);
+
   try {
     await db.insert(ingressRequests).values({
       id: requestId,
@@ -1061,8 +1062,8 @@ async function handlePublicWebsocket(
       streamId,
       method: request.method,
       host: hostContext.parsedHost,
-      path: request.url.split('?')[0] ?? '/',
-      query: request.url.includes('?') ? (request.url.split('?')[1] ?? '') : '',
+      path: wsPath,
+      query: wsQuery,
       requestHeaders: redactHeaders(request.headers),
       responseHeaders: {}
     });
@@ -1076,8 +1077,8 @@ async function handlePublicWebsocket(
     streamId,
     protocol: 'ws',
     method: request.method,
-    path: request.url.split('?')[0] ?? '/',
-    query: request.url.includes('?') ? (request.url.split('?')[1] ?? '') : '',
+    path: wsPath,
+    query: wsQuery,
     headers: normalizeHeaders(request.headers)
   };
 
@@ -1271,13 +1272,17 @@ async function failStream(
   }
 
   if (state.protocol === 'http' && state.reply && !state.reply.raw.writableEnded) {
-    state.reply.raw.statusCode = statusCode;
-    state.reply.raw.end(JSON.stringify({
-      error: {
-        code: errorCode,
-        message: errorMessage
-      }
-    }));
+    if (!state.reply.raw.headersSent) {
+      state.reply.raw.statusCode = statusCode;
+      state.reply.raw.end(JSON.stringify({
+        error: {
+          code: errorCode,
+          message: errorMessage
+        }
+      }));
+    } else {
+      state.reply.raw.destroy();
+    }
   }
 
   if (
