@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises';
 
 import { Args, Command, Flags } from '@oclif/core';
+import { ux } from '@oclif/core';
 
 import { loadApiClient } from '../../lib/client.js';
 import { ensureLoggedIn } from '../../lib/project.js';
@@ -21,7 +22,8 @@ export default class LineSend extends Command {
 
   static flags = {
     body: Flags.string({ description: 'Raw JSON body string' }),
-    bodyFile: Flags.string({ description: 'Path to JSON body file' })
+    bodyFile: Flags.string({ description: 'Path to JSON body file' }),
+    json: Flags.boolean({ description: 'Output as JSON', default: false })
   };
 
   async run(): Promise<void> {
@@ -49,7 +51,16 @@ export default class LineSend extends Command {
         throw new Error(`Unsupported message type: ${args.type}`);
     }
 
-    this.log(JSON.stringify(response, null, 2));
+    if (flags.json) {
+      this.log(JSON.stringify(response, null, 2));
+      return;
+    }
+
+    const status = response.ok ? ux.colorize('green', 'OK') : ux.colorize('red', 'FAILED');
+    this.log(`${args.type} ${status}`);
+    if (response.lineRequestId) {
+      this.log(`Request ID: ${response.lineRequestId}`);
+    }
   }
 
   private async resolveBody(

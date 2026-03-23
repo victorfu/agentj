@@ -458,19 +458,31 @@ function clearPendingOfflineTimer(tunnelId: string): void {
 function scheduleTunnelOfflineAfterGrace(tunnelId: string): void {
   clearPendingOfflineTimer(tunnelId);
 
-  const timer = setTimeout(() => {
+  const timer = setTimeout(async () => {
     pendingOfflineTimersByTunnel.delete(tunnelId);
     if (agentsByTunnel.has(tunnelId)) {
       return;
     }
 
-    runSafely(
-      db
-        .update(tunnels)
-        .set({ status: 'offline', updatedAt: new Date() })
-        .where(eq(tunnels.id, tunnelId)),
-      `mark_tunnel_offline:${tunnelId}`
-    );
+    const linkedChannel = await db.query.lineChannels.findFirst({
+      where: eq(lineChannels.tunnelId, tunnelId),
+      columns: { id: true }
+    });
+
+    if (linkedChannel) {
+      runSafely(
+        db
+          .update(tunnels)
+          .set({ status: 'offline', updatedAt: new Date() })
+          .where(eq(tunnels.id, tunnelId)),
+        `mark_tunnel_offline:${tunnelId}`
+      );
+    } else {
+      runSafely(
+        db.delete(tunnels).where(eq(tunnels.id, tunnelId)),
+        `auto_delete_tunnel:${tunnelId}`
+      );
+    }
   }, env.AGENTJ_AGENT_RECONNECT_GRACE_MS);
   timer.unref();
 
