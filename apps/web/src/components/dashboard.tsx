@@ -61,7 +61,7 @@ interface CreatedPatResponse {
   createdAt: string;
 }
 
-const REFRESH_INTERVAL_MS = 5000;
+const REFRESH_INTERVAL_MS = 15_000;
 
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
@@ -73,7 +73,7 @@ function CopyButton({ text }: { text: string }) {
       toast.success('Copied to clipboard');
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      // fallback
+      toast.error('Failed to copy. Please copy manually.');
     }
   }
 
@@ -228,13 +228,6 @@ export function Dashboard() {
 
     const init = async () => {
       try {
-        const sessionRes = await fetch('/api/v1/auth/session');
-        if (sessionRes.status === 401) {
-          window.location.href = '/login';
-          return;
-        }
-        if (!sessionRes.ok) throw new Error(await sessionRes.text());
-
         const currentPat = await ensurePat();
         if (!isCurrent || !currentPat) return;
         setPat(currentPat);
@@ -455,7 +448,7 @@ export function Dashboard() {
               <h3 className="font-bold">Active Tunnels</h3>
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
                 <Gauge className="size-3.5" />
-                Auto-refresh 5s
+                Auto-refresh 15s
               </div>
             </div>
 

@@ -7,6 +7,7 @@ import { hashPatToken, patTokens, sessions, users, workspaceMembers } from '@age
 
 import { db } from './db';
 import { getWebEnv } from './env';
+import { evictSessionCache, getSessionCache, setSessionCache } from './session-cache';
 
 export const SESSION_COOKIE_NAME = 'agentj_session';
 
@@ -66,6 +67,7 @@ export async function createSession(userId: string, workspaceId: string): Promis
 
 export async function revokeSessionByToken(token: string): Promise<void> {
   const tokenHash = hashSessionToken(token);
+  evictSessionCache(tokenHash);
   await db
     .update(sessions)
     .set({ revokedAt: new Date() })
@@ -79,6 +81,10 @@ export async function requireSessionAuth(request: NextRequest): Promise<SessionA
   }
 
   const tokenHash = hashSessionToken(token);
+
+  const cached = getSessionCache(tokenHash);
+  if (cached) return cached;
+
   const session = await db.query.sessions.findFirst({
     where: and(
       eq(sessions.sessionTokenHash, tokenHash),
@@ -101,7 +107,7 @@ export async function requireSessionAuth(request: NextRequest): Promise<SessionA
     return null;
   }
 
-  return {
+  const result: SessionAuthContext = {
     sessionId: session.id,
     userId: user.id,
     workspaceId: session.workspaceId,
@@ -109,6 +115,9 @@ export async function requireSessionAuth(request: NextRequest): Promise<SessionA
     email: user.email,
     name: user.name
   };
+
+  setSessionCache(tokenHash, result);
+  return result;
 }
 
 export async function requirePatAuth(request: NextRequest): Promise<PatAuthContext | null> {

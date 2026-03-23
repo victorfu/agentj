@@ -79,13 +79,19 @@ export default class LineInit extends Command {
       this.log(`LINE channel created: ${lineChannel.id}`);
       this.log(`Expected webhook URL: ${lineChannel.webhookUrl ?? '(unknown)'}`);
 
-      const synced = await client.syncLineWebhook(lineChannel.id);
-      this.log(`Webhook synced: ${synced.endpoint}`);
+      try {
+        const synced = await client.syncLineWebhook(lineChannel.id);
+        this.log(`Webhook synced: ${synced.endpoint}`);
 
-      const tested = await client.testLineWebhook(lineChannel.id);
-      this.log(`Webhook test status: ${tested.ok ? 'ok' : 'not ok'}`);
-      if (tested.lineRequestId) {
-        this.log(`LINE request id: ${tested.lineRequestId}`);
+        const tested = await client.testLineWebhook(lineChannel.id);
+        this.log(`Webhook test status: ${tested.ok ? 'ok' : 'not ok'}`);
+        if (tested.lineRequestId) {
+          this.log(`LINE request id: ${tested.lineRequestId}`);
+        }
+      } catch (error) {
+        this.warn(
+          `Webhook sync failed: ${(error as Error).message}. The tunnel agent will still start, but LINE events will not arrive until the webhook is synced. Run "agentj line webhook sync" after configuring HTTPS.`
+        );
       }
     } finally {
       rl.close();

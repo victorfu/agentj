@@ -31,6 +31,16 @@ export async function POST(
   }
 
   const endpoint = lineWebhookUrl(found.tunnel.subdomain);
+
+  if (!endpoint.startsWith('https://')) {
+    return jsonError(
+      'WEBHOOK_URL_NOT_HTTPS',
+      `LINE requires an HTTPS webhook URL, but the current configuration produces: ${endpoint}. ` +
+        'Set AGENTJ_TUNNEL_PUBLIC_SCHEME=https and AGENTJ_TUNNEL_BASE_DOMAIN to a publicly accessible domain.',
+      400
+    );
+  }
+
   const result = await callLineApi({
     lineChannelId: found.channel.id,
     channelAccessToken: found.channel.channelAccessToken,
