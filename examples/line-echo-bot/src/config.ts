@@ -17,6 +17,6 @@ const required = (name: string): string => {
 export const config: Config = {
   lineChannelSecret: required('LINE_CHANNEL_SECRET'),
   lineChannelAccessToken: required('LINE_CHANNEL_ACCESS_TOKEN'),
-  port: Number(process.env['PORT'] ?? 3000),
-  logLevel: process.env['LOG_LEVEL'] ?? 'info',
+  port: Number(process.env['PORT'] ?? 8080),
+  logLevel: process.env['LOG_LEVEL'] ?? 'info'
 };

@@ -18,11 +18,11 @@ describe('mapGatewayCloseAction', () => {
     expect(action?.message).toContain('AGENTJ_GATEWAY_WS_PUBLIC_URL');
   });
 
-  it('maps 4410 to offline diagnostic', () => {
+  it('maps 4410 to tunnel-deleted diagnostic', () => {
     const action = mapGatewayCloseAction(4410);
     expect(action).toBeTruthy();
     expect(action?.shouldExitNonZero).toBe(true);
-    expect(action?.message).toContain('Tunnel offline');
+    expect(action?.message).toContain('Tunnel was deleted');
   });
 
   it('maps 4408 to hello timeout diagnostic', () => {
@@ -65,12 +65,12 @@ describe('retry policy', () => {
     expect(isRetryableGatewayCloseCode(4400)).toBe(false);
     expect(isRetryableGatewayCloseCode(4401)).toBe(false);
     expect(isRetryableGatewayCloseCode(4404)).toBe(false);
+    expect(isRetryableGatewayCloseCode(4410)).toBe(false);
     expect(isRetryableGatewayCloseCode(1000)).toBe(false);
   });
 
   it('marks transient close codes as retryable', () => {
     expect(isRetryableGatewayCloseCode(4408)).toBe(true);
-    expect(isRetryableGatewayCloseCode(4410)).toBe(true);
     expect(isRetryableGatewayCloseCode(4411)).toBe(true);
     expect(isRetryableGatewayCloseCode(4429)).toBe(true);
     expect(isRetryableGatewayCloseCode(1011)).toBe(true);

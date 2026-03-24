@@ -971,6 +971,21 @@ async function handleAgentConnection(socket: WebSocket, req: FastifyRequest): Pr
     runSafely(
       (async () => {
         try {
+          // Check if the tunnel still exists in the DB (may have been deleted via API)
+          const tunnelExists = await db.query.tunnels.findFirst({
+            where: eq(tunnels.id, activeConnection!.tunnelId),
+            columns: { id: true }
+          });
+
+          if (!tunnelExists) {
+            app.log.info(
+              { tunnelId: activeConnection!.tunnelId, sessionId },
+              'tunnel deleted externally, closing agent connection'
+            );
+            socket.close(4410, 'Tunnel deleted');
+            return;
+          }
+
           await agentSendQueue.send(
             serializeGatewayMessage({
               type: 'ping',

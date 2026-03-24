@@ -43,7 +43,7 @@ const DEFAULT_WS_SEND_TIMEOUT_MS = 60000;
 const RECONNECT_BASE_DELAY_MS = 1000;
 const RECONNECT_MAX_DELAY_MS = 15000;
 const RECONNECT_JITTER_RATIO = 0.2;
-const NON_RETRYABLE_CLOSE_CODES = new Set([4001, 4400, 4401, 4404]);
+const NON_RETRYABLE_CLOSE_CODES = new Set([4001, 4400, 4401, 4404, 4410]);
 
 export interface GatewayCloseAction {
   shouldExitNonZero: boolean;
@@ -88,7 +88,7 @@ export function mapGatewayCloseAction(code: number): GatewayCloseAction | null {
   if (code === 4410) {
     return {
       shouldExitNonZero: true,
-      message: 'Tunnel offline or superseded (4410). The tunnel agent is not active for this tunnel.'
+      message: 'Tunnel was deleted (4410). It may have been replaced by another session (e.g. a new `line init`).'
     };
   }
 
