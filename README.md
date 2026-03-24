@@ -26,24 +26,15 @@ npx agentj-cli <command>
 
 ## CLI 使用教學
 
-### 1. 登入
+### 1. 快速建立 LINE Bot
 
-從 [AgentJ Dashboard](https://aj.savy.tw) 登入後，進入個人設定頁面取得 **Personal Access Token（PAT）**，然後在終端機執行：
-
-```sh
-agentj login <your-PAT>
-agentj whoami              # 確認登入成功
-```
-
-### 2. 快速建立 LINE Bot
-
-最常見的用法：將本地 server 接上 LINE Bot webhook，一行搞定：
+不需要註冊帳號，直接開始：
 
 ```sh
 agentj line init 3000
 ```
 
-CLI 會依序詢問 Channel ID、Channel Secret、Channel Access Token，完成後自動建立 tunnel、設定 webhook、開始轉發。
+CLI 會自動建立匿名帳號，並依序詢問 Channel ID、Channel Secret、Channel Access Token，完成後自動建立 tunnel、設定 webhook、開始轉發。
 
 > 第一次使用需要從 LINE Developers Console 取得上述三個值，詳見下方「[LINE Bot 整合](#line-bot-整合)」章節。
 
@@ -55,7 +46,7 @@ agentj line connect my-channel         # 指定 channel name
 agentj line connect my-channel 3000    # 覆寫本地 port
 ```
 
-### 3. 開啟 Tunnel（通用）
+### 2. 開啟 Tunnel（通用）
 
 如果只需要將本地 port 暴露到公開 HTTPS 網址（不綁定 LINE Bot）：
 
@@ -67,12 +58,23 @@ agentj http 8080
 
 打開輸出的網址，即可從外部存取你本地的服務。
 
-### 4. 管理 Tunnel
+### 3. 管理 Tunnel
 
 ```sh
 agentj tunnel ls           # 列出所有 tunnels
 agentj tunnel stop <id>    # 停止 tunnel
 agentj logs <id> --follow  # 即時查看請求 logs
+```
+
+### 4. 登入（解鎖更多功能）
+
+匿名帳號限制同時 1 條 tunnel 連線。註冊登入後可使用多條 tunnel 及完整功能。
+
+從 [AgentJ Dashboard](https://aj.savy.tw) 註冊登入，進入個人設定頁面取得 **Personal Access Token（PAT）**，然後執行：
+
+```sh
+agentj login <your-PAT>
+agentj whoami              # 確認登入成功
 ```
 
 ---
