@@ -3,10 +3,13 @@ import { randomUUID } from 'node:crypto';
 import { type NextRequest } from 'next/server';
 import { z } from 'zod';
 
-import { auditLogs, tunnels } from '@agentj/contracts';
+import { and, eq, ne, sql } from 'drizzle-orm';
+
+import { auditLogs, tunnels, users } from '@agentj/contracts';
 
 import { requirePatAuth } from '@/lib/auth';
 import { db } from '@/lib/db';
+import { isUniqueViolation } from '@/lib/db-errors';
 import { getWebEnv } from '@/lib/env';
 import { jsonError, jsonNoStore } from '@/lib/http';
 import { listAccessibleTunnels } from '@/lib/tunnel-access';
@@ -17,15 +20,6 @@ const createTunnelSchema = z.object({
 });
 
 export const dynamic = 'force-dynamic';
-
-function isUniqueViolation(error: unknown): boolean {
-  return (
-    typeof error === 'object' &&
-    error !== null &&
-    'code' in error &&
-    (error as { code?: unknown }).code === '23505'
-  );
-}
 
 function randomSubdomain(): string {
   return Math.random().toString(36).slice(2, 10);
@@ -68,6 +62,11 @@ export async function POST(request: NextRequest) {
     return jsonError('UNAUTHORIZED', 'Invalid PAT token', 401);
   }
 
+  const user = await db.query.users.findFirst({
+    where: eq(users.id, auth.userId),
+    columns: { isAnonymous: true }
+  });
+
   let body: unknown;
   try {
     body = await request.json();
@@ -84,21 +83,69 @@ export async function POST(request: NextRequest) {
   for (let i = 0; i < 5; i += 1) {
     const subdomain = randomSubdomain();
     try {
-      const [created] = await db
-        .insert(tunnels)
-        .values({
-          id: `tun_${randomUUID()}`,
-          patTokenId: auth.patTokenId,
-          workspaceId: auth.workspaceId,
-          subdomain,
-          status: 'offline',
-          targetHost: parsed.data.targetHost,
-          targetPort: parsed.data.targetPort,
-          createdBy: auth.userId
-        })
-        .returning();
+      if (user?.isAnonymous) {
+        // Use advisory lock to prevent TOCTOU race on anonymous tunnel limit
+        const row = await db.transaction(async (tx) => {
+          await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${auth.workspaceId}))`);
 
-      createdTunnel = created ?? null;
+          const activeTunnels = await tx
+            .select({ id: tunnels.id })
+            .from(tunnels)
+            .where(
+              and(
+                eq(tunnels.workspaceId, auth.workspaceId),
+                ne(tunnels.status, 'stopped')
+              )
+            );
+
+          if (activeTunnels.length >= 1) {
+            return null;
+          }
+
+          const [created] = await tx
+            .insert(tunnels)
+            .values({
+              id: `tun_${randomUUID()}`,
+              patTokenId: auth.patTokenId,
+              workspaceId: auth.workspaceId,
+              subdomain,
+              status: 'offline',
+              targetHost: parsed.data.targetHost,
+              targetPort: parsed.data.targetPort,
+              createdBy: auth.userId
+            })
+            .returning();
+
+          return created ?? null;
+        });
+
+        if (row === null) {
+          return jsonError(
+            'ANONYMOUS_TUNNEL_LIMIT',
+            'Anonymous users are limited to 1 concurrent tunnel. Register for unlimited tunnels.',
+            429
+          );
+        }
+
+        createdTunnel = row;
+      } else {
+        const [created] = await db
+          .insert(tunnels)
+          .values({
+            id: `tun_${randomUUID()}`,
+            patTokenId: auth.patTokenId,
+            workspaceId: auth.workspaceId,
+            subdomain,
+            status: 'offline',
+            targetHost: parsed.data.targetHost,
+            targetPort: parsed.data.targetPort,
+            createdBy: auth.userId
+          })
+          .returning();
+
+        createdTunnel = created ?? null;
+      }
+
       break;
     } catch (error) {
       if (isUniqueViolation(error)) {

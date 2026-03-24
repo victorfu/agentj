@@ -8,19 +8,11 @@ import { generatePatToken, getPatPrefix, hashPatToken, patTokens } from '@agentj
 import { requireSessionAuth } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { jsonError, jsonNoStore } from '@/lib/http';
+import { isUniqueViolation } from '@/lib/db-errors';
 
 export const dynamic = 'force-dynamic';
 
 const DEFAULT_PAT_SCOPES = ['tunnels:write', 'requests:read', 'line:manage', 'line:messages'];
-
-function isUniqueViolation(error: unknown): boolean {
-  return (
-    typeof error === 'object' &&
-    error !== null &&
-    'code' in error &&
-    (error as { code?: unknown }).code === '23505'
-  );
-}
 
 export async function GET(request: NextRequest) {
   const auth = await requireSessionAuth(request);

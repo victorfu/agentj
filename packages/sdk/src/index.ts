@@ -1,4 +1,5 @@
 import type {
+  AnonymousProvisionResponse,
   CreateLineChannelRequest,
   ConnectTokenResponse,
   LineApiProxyResponse,
@@ -63,6 +64,10 @@ export class AgentjApiClient {
 
   async getSession(): Promise<SessionResponse> {
     return this.#request('/api/v1/auth/session', 'GET');
+  }
+
+  async provisionAnonymous(): Promise<AnonymousProvisionResponse> {
+    return this.#request('/api/v1/auth/anonymous', 'POST');
   }
 
   async listTunnels(): Promise<Tunnel[]> {

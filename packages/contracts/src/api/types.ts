@@ -35,6 +35,12 @@ export interface LoginRequest {
   password: string;
 }
 
+export interface AnonymousProvisionResponse {
+  token: string;
+  userId: string;
+  workspaceId: string;
+}
+
 export interface Tunnel {
   id: string;
   subdomain: string;

@@ -23,6 +23,7 @@ export const users = pgTable('users', {
   email: text('email').notNull().unique(),
   name: text('name').notNull(),
   passwordHash: text('password_hash'),
+  isAnonymous: boolean('is_anonymous').notNull().default(false),
   emailVerifiedAt: timestamp('email_verified_at', { withTimezone: true }),
   lastLoginAt: timestamp('last_login_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
