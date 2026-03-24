@@ -35,9 +35,29 @@ agentj login <your-PAT>
 agentj whoami              # 確認登入成功
 ```
 
-### 2. 開啟 Tunnel
+### 2. 快速建立 LINE Bot
 
-將本地 port 暴露到公開 HTTPS 網址：
+最常見的用法：將本地 server 接上 LINE Bot webhook，一行搞定：
+
+```sh
+agentj line init 3000
+```
+
+CLI 會依序詢問 Channel ID、Channel Secret、Channel Access Token，完成後自動建立 tunnel、設定 webhook、開始轉發。
+
+> 第一次使用需要從 LINE Developers Console 取得上述三個值，詳見下方「[LINE Bot 整合](#line-bot-整合)」章節。
+
+**下次啟動：** 不需要重新輸入憑證，直接用 `line connect` 重新連線：
+
+```sh
+agentj line connect                    # 自動選擇（僅一個 channel 時）
+agentj line connect my-channel         # 指定 channel name
+agentj line connect my-channel 3000    # 覆寫本地 port
+```
+
+### 3. 開啟 Tunnel（通用）
+
+如果只需要將本地 port 暴露到公開 HTTPS 網址（不綁定 LINE Bot）：
 
 ```sh
 agentj http 8080
@@ -47,7 +67,7 @@ agentj http 8080
 
 打開輸出的網址，即可從外部存取你本地的服務。
 
-### 3. 管理 Tunnel
+### 4. 管理 Tunnel
 
 ```sh
 agentj tunnel ls           # 列出所有 tunnels
