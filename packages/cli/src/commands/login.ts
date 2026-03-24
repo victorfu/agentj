@@ -26,7 +26,7 @@ export default class Login extends Command {
     const { args, flags } = await this.parse(Login);
     const token = flags.token ?? args.token;
     if (!token) {
-      throw new Error('Token is required. Provide `--token <PAT>` or `aj login <PAT>`.');
+      throw new Error('Token is required. Provide `--token <PAT>` or `agentj-cli login <PAT>`.');
     }
 
     const config = resolveCliConfig();

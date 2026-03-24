@@ -13,7 +13,7 @@ export default class WhoAmI extends Command {
     const { flags } = await this.parse(WhoAmI);
     const client = await loadApiClient();
     if (!client.token) {
-      throw new Error('No token found. Run `aj login <PAT>` first.');
+      throw new Error('No token found. Run `agentj-cli login <PAT>` first.');
     }
 
     const me = await client.me();

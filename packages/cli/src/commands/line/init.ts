@@ -42,23 +42,36 @@ export default class LineInit extends Command {
     const client = await loadApiClient();
     const config = resolveCliConfig();
 
-    if (!client.token) {
+    const provisionAnonymous = async () => {
       this.log('No account found. Provisioning anonymous access...');
+      const result = await client.provisionAnonymous();
+      await saveToken(result.token, config.configFile);
+      client.setToken(result.token);
+      this.log(`Anonymous mode active (1 tunnel max). Register at ${config.appBaseUrl} for full features.`);
+    };
+
+    if (!client.token) {
       try {
-        const result = await client.provisionAnonymous();
-        await saveToken(result.token, config.configFile);
-        client.setToken(result.token);
-        this.log(`Anonymous mode active (1 tunnel max). Register at ${config.appBaseUrl} for full features.`);
+        await provisionAnonymous();
       } catch (error) {
         this.error(`Failed to provision anonymous access: ${(error as Error).message}`);
       }
     }
 
     // Anonymous users are limited to 1 tunnel — clean up stale tunnels before creating a new one
-    const existing = await client.listTunnels();
-    for (const t of existing) {
-      this.log(`Removing stale tunnel ${t.id}...`);
-      await client.stopTunnel(t.id);
+    try {
+      const existing = await client.listTunnels();
+      for (const t of existing) {
+        this.log(`Removing stale tunnel ${t.id}...`);
+        await client.stopTunnel(t.id);
+      }
+    } catch {
+      // Token might be stale — re-provision anonymous access
+      try {
+        await provisionAnonymous();
+      } catch (error) {
+        this.error(`Failed to provision anonymous access: ${(error as Error).message}`);
+      }
     }
 
     const target = resolveLocalHttpTarget(args.target, flags.host);
