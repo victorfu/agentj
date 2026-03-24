@@ -7,7 +7,7 @@ import { loadApiClient } from '../../lib/client.js';
 import { resolveCliConfig } from '../../lib/config.js';
 import { computeReconnectDelayMs, mapGatewayCloseAction, runAgent } from '../../lib/gateway-agent.js';
 import { resolveLocalHttpTarget } from '../../lib/http-target.js';
-import { ensureLoggedIn } from '../../lib/project.js';
+import { saveToken } from '../../lib/token-store.js';
 
 const STABLE_CONNECTION_RESET_MS = 30000;
 
@@ -41,7 +41,25 @@ export default class LineInit extends Command {
 
     const client = await loadApiClient();
     const config = resolveCliConfig();
-    ensureLoggedIn(client);
+
+    if (!client.token) {
+      this.log('No account found. Provisioning anonymous access...');
+      try {
+        const result = await client.provisionAnonymous();
+        await saveToken(result.token, config.configFile);
+        client.setToken(result.token);
+        this.log(`Anonymous mode active (1 tunnel max). Register at ${config.appBaseUrl} for full features.`);
+      } catch (error) {
+        this.error(`Failed to provision anonymous access: ${(error as Error).message}`);
+      }
+    }
+
+    // Anonymous users are limited to 1 tunnel — clean up stale tunnels before creating a new one
+    const existing = await client.listTunnels();
+    for (const t of existing) {
+      this.log(`Removing stale tunnel ${t.id}...`);
+      await client.stopTunnel(t.id);
+    }
 
     const target = resolveLocalHttpTarget(args.target, flags.host);
     const tunnel = await client.createTunnel({

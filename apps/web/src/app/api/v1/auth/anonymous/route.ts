@@ -18,7 +18,7 @@ import { jsonError, jsonNoStore } from '@/lib/http';
 
 export const dynamic = 'force-dynamic';
 
-const ANONYMOUS_PAT_SCOPES = ['tunnels:write', 'requests:read'];
+const ANONYMOUS_PAT_SCOPES = ['tunnels:write', 'requests:read', 'line:manage'];
 
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const RATE_LIMIT_MAX = 5;
