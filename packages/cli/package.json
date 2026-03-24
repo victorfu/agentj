@@ -1,6 +1,6 @@
 {
   "name": "agentj-cli",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "CLI for Agentj tunnel - expose local servers to the internet",
   "type": "module",
   "bin": {
