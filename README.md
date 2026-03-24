@@ -1,6 +1,8 @@
 # AgentJ
 
-[AgentJ](https://aj.savy.tw) 是一個 tunnel 服務，讓你將本地 HTTP server 暴露到公開網址，並提供 LINE Bot webhook 一鍵託管。
+> **⚠️ 注意：本服務目前尚未正式上線，仍在測試階段。**
+
+AgentJ 是一個 tunnel 服務，讓你將本地 HTTP server 暴露到公開網址，並提供 LINE Bot webhook 一鍵託管。
 
 適用情境：
 
@@ -54,7 +56,7 @@ agentj line connect my-channel 8080    # 覆寫本地 port
 ```sh
 agentj http 8080
 # Tunnel: tun_xxxx
-# Forwarding: https://abc123.tunnel.savy.tw -> http://127.0.0.1:8080
+# Forwarding: https://<tunnel id>.tunnel.example.com -> http://127.0.0.1:8080
 ```
 
 打開輸出的網址，即可從外部存取你本地的服務。
@@ -71,7 +73,7 @@ agentj logs <id> --follow  # 即時查看請求 logs
 
 匿名帳號限制同時 1 條 tunnel 連線。註冊登入後可使用多條 tunnel 及完整功能。
 
-從 [AgentJ Dashboard](https://aj.savy.tw) 註冊登入，進入個人設定頁面取得 **Personal Access Token（PAT）**，然後執行：
+從 web 介面註冊登入，進入個人設定頁面取得 **Personal Access Token（PAT）**，然後執行：
 
 ```sh
 agentj login <your-PAT>
